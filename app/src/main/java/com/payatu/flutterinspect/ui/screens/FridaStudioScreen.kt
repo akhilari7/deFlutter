@@ -165,6 +165,7 @@ fun FridaStudioScreen(
             }
 
             consoleLogs.clear()
+            com.payatu.flutterinspect.server.TraceLogBroadcaster.clear()
             consoleLogs.add("[*] Initializing Frida in-app interceptor...")
             consoleLogs.add("[*] Target App: $targetProcess")
             consoleLogs.add("[*] Mode: ${if (isAttachMode) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
@@ -227,6 +228,7 @@ fun FridaStudioScreen(
             }
 
             consoleLogs.clear()
+            com.payatu.flutterinspect.server.TraceLogBroadcaster.clear()
             val msg1 = "[★] Initializing Dobby Native Inline Tracer..."
             val msg2 = "[*] Target App: $targetProcess"
             consoleLogs.add(msg1)
@@ -1042,7 +1044,10 @@ fun FridaStudioScreen(
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
-                            onClick = { consoleLogs.clear() },
+                            onClick = {
+                                consoleLogs.clear()
+                                com.payatu.flutterinspect.server.TraceLogBroadcaster.clear()
+                            },
                             enabled = consoleLogs.isNotEmpty(),
                             modifier = Modifier.size(28.dp)
                         ) {

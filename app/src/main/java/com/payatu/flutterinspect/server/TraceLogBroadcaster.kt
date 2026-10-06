@@ -16,7 +16,7 @@ import java.util.Collections
  */
 object TraceLogBroadcaster {
 
-    private val _logsFlow = MutableSharedFlow<String>(replay = 200, extraBufferCapacity = 1000)
+    private val _logsFlow = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1000)
     val logsFlow: SharedFlow<String> = _logsFlow.asSharedFlow()
 
     private val logBuffer = Collections.synchronizedList(mutableListOf<String>())
@@ -78,6 +78,7 @@ object TraceLogBroadcaster {
         synchronized(logBuffer) {
             logBuffer.clear()
         }
+        _logsFlow.resetReplayCache()
         _logsFlow.tryEmit("__CLEAR_LOGS__")
     }
 }
