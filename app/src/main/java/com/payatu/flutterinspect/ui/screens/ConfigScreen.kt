@@ -34,6 +34,7 @@ import com.payatu.flutterinspect.data.shell.RootShell
 import com.payatu.flutterinspect.data.symbols.SymbolManager
 import com.payatu.flutterinspect.data.symbols.DartSymbolFunction
 import com.payatu.flutterinspect.server.WebTerminalServer
+import com.payatu.flutterinspect.util.FridaInstaller
 import com.payatu.flutterinspect.ui.components.AppPickerSheet
 import com.payatu.flutterinspect.ui.theme.*
 import kotlinx.coroutines.Dispatchers
@@ -934,6 +935,164 @@ fun ConfigScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Section: Frida Engine Status & On-Device Installer
+        var fridaStatus by remember { mutableStateOf<FridaInstaller.FridaStatus?>(null) }
+        var isCheckingFrida by remember { mutableStateOf(false) }
+        var isInstallingFrida by remember { mutableStateOf(false) }
+        var fridaInstallProgress by remember { mutableStateOf("") }
+
+        LaunchedEffect(Unit) {
+            isCheckingFrida = true
+            fridaStatus = FridaInstaller.checkStatus()
+            isCheckingFrida = false
+        }
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SlateSurface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.5f) else SlateBorder,
+                    RoundedCornerShape(12.dp)
+                )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "FRIDA-INJECT ENGINE",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.15f)
+                                            else AmberWarning.copy(alpha = 0.15f)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isCheckingFrida -> "CHECKING..."
+                                            fridaStatus?.isInstalled == true -> "v${fridaStatus?.version ?: "ACTIVE"}"
+                                            else -> "NOT FOUND"
+                                        },
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (fridaStatus?.isInstalled == true)
+                                    "Ready at /data/local/tmp/frida-inject • Standalone on-device engine"
+                                else
+                                    "Required for Frida JS Interceptor. 1-tap download from GitHub releases",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                isCheckingFrida = true
+                                fridaStatus = FridaInstaller.checkStatus()
+                                isCheckingFrida = false
+                            }
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (isInstallingFrida) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SlateSurfaceVariant)
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = CyanPrimary,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = fridaInstallProgress.ifBlank { "Installing frida-inject..." },
+                                fontSize = 11.sp,
+                                color = CyanPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else if (fridaStatus?.isInstalled == false) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isInstallingFrida = true
+                                val res = FridaInstaller.downloadAndInstall(context.cacheDir) { progress ->
+                                    fridaInstallProgress = progress
+                                }
+                                isInstallingFrida = false
+                                if (res.isSuccess) {
+                                    fridaStatus = FridaInstaller.checkStatus()
+                                    Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Install failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(38.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = SlateBackground, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "INSTALL FRIDA-INJECT (AUTO-FETCH LATEST)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SlateBackground
+                        )
                     }
                 }
             }

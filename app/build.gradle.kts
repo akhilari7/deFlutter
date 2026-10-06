@@ -78,5 +78,8 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.cors)
 
+    // XZ decompression for on-device Frida binary installation
+    implementation("org.tukaani:xz:1.9")
+
     debugImplementation(libs.compose.ui.tooling)
 }
