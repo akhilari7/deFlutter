@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#131B2E" />
+      <stop offset="100%" stop-color="#0A0E17" />
+    </radialGradient>
+
+    <!-- Top Wing Gradient: Cyber Cyan -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38E1FF" />
+      <stop offset="100%" stop-color="#00A8FF" />
+    </linearGradient>
+
+    <!-- Lower Wing Gradient: Electric Purple -->
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+
+    <!-- Lightning Pulse Gradient -->
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="35%" stop-color="#00E5FF" />
+      <stop offset="85%" stop-color="#A855F7" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+
+    <!-- Outer Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur1" />
+      <feGaussianBlur stdDeviation="14" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="boltGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur1" />
+      <feGaussianBlur stdDeviation="12" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark Slate Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGlow)" />
+
+  <g transform="translate(10, 0)">
+    <!-- Flutter Upper Wing (Cyber Cyan) -->
+    <polygon points="128,256 264,120 376,120 184,312" fill="url(#cyanGrad)" />
+
+    <!-- Flutter Lower Wing (Electric Purple) -->
+    <polygon points="220,348 292,420 376,420 258,302 312,248 258,248" fill="url(#purpleGrad)" />
+
+    <!-- Subtle wing depth bevel -->
+    <polygon points="128,256 184,312 170,312 128,270" fill="#00E5FF" opacity="0.35" />
+    <polygon points="292,420 376,420 360,420 292,420" fill="#C084FC" opacity="0.4" />
+
+    <!-- Electric Lightning Tracer Seam (Center Dissection Pulse) -->
+    <!-- Glow halo under bolt -->
+    <path d="M 330,154 
+             L 242,246 
+             L 282,246 
+             L 204,334 
+             L 230,286 
+             L 194,286 Z" 
+          fill="#00E5FF" opacity="0.5" filter="url(#boltGlow)" />
+
+    <!-- Core Lightning Bolt -->
+    <path d="M 330,154 
+             L 242,246 
+             L 282,246 
+             L 204,334 
+             L 230,286 
+             L 194,286 Z" 
+          fill="url(#boltGrad)" />
+
+    <!-- Ultra-hot core filament -->
+    <path d="M 324,162 
+             L 248,242 
+             L 278,242 
+             L 214,318 
+             L 232,284 
+             L 204,284 Z" 
+          fill="#FFFFFF" opacity="0.85" />
+  </g>
+</svg>

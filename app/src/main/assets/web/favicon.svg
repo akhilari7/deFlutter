@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Top Wing Gradient: Cyber Cyan -->
+    <linearGradient id="favCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38E1FF" />
+      <stop offset="100%" stop-color="#00A8FF" />
+    </linearGradient>
+
+    <!-- Lower Wing Gradient: Electric Purple -->
+    <linearGradient id="favPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+
+    <!-- Lightning Pulse Gradient -->
+    <linearGradient id="favBolt" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="40%" stop-color="#00E5FF" />
+      <stop offset="100%" stop-color="#A855F7" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(10, 0)">
+    <!-- Flutter Upper Wing -->
+    <polygon points="128,256 264,120 376,120 184,312" fill="url(#favCyan)" />
+
+    <!-- Flutter Lower Wing -->
+    <polygon points="220,348 292,420 376,420 258,302 312,248 258,248" fill="url(#favPurple)" />
+
+    <!-- Electric Lightning Tracer Seam -->
+    <path d="M 330,154 L 242,246 L 282,246 L 204,334 L 230,286 L 194,286 Z" fill="url(#favBolt)" />
+    <!-- White Hot Core -->
+    <path d="M 324,162 L 248,242 L 278,242 L 214,318 L 232,284 L 204,284 Z" fill="#FFFFFF" opacity="0.9" />
+  </g>
+</svg>

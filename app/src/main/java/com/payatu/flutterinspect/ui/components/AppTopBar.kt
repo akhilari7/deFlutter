@@ -11,10 +11,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.payatu.flutterinspect.R
 import com.payatu.flutterinspect.ui.theme.*
 
 @Composable
@@ -44,10 +47,10 @@ fun AppTopBar(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = "Logo",
-                        tint = CyanPrimary,
-                        modifier = Modifier.size(20.dp)
+                        painter = painterResource(id = R.drawable.ic_deflutter_logo),
+                        contentDescription = "Deflutter Logo",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Group for centering -->
+    <group
+        android:translateX="10">
+        <!-- Flutter Upper Wing: Cyber Cyan -->
+        <path
+            android:fillColor="#00E5FF"
+            android:pathData="M128,256 L264,120 L376,120 L184,312 Z" />
+
+        <!-- Flutter Lower Wing: Electric Purple -->
+        <path
+            android:fillColor="#A855F7"
+            android:pathData="M220,348 L292,420 L376,420 L258,302 L312,248 L258,248 Z" />
+
+        <!-- Electric Lightning Tracer Seam: Cyber Cyan to White core -->
+        <path
+            android:fillColor="#00E5FF"
+            android:pathData="M330,154 L242,246 L282,246 L204,334 L230,286 L194,286 Z" />
+
+        <!-- Lightning Center Hot Core -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M324,162 L248,242 L278,242 L214,318 L232,284 L204,284 Z" />
+    </group>
+</vector>

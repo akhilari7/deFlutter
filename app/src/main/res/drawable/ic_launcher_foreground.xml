@@ -2,9 +2,34 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#00E5FF"
-        android:pathData="M30,30 L60,30 L75,45 L45,45 Z M45,45 L75,45 L60,60 L30,60 Z M45,63 L60,48 L75,63 L60,78 Z" />
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- Scale and center inside adaptive 512x512 canvas (66dp safe zone) -->
+    <group
+        android:scaleX="0.68"
+        android:scaleY="0.68"
+        android:translateX="88"
+        android:translateY="82">
+
+        <!-- Flutter Upper Wing: Cyber Cyan -->
+        <path
+            android:fillColor="#00E5FF"
+            android:pathData="M128,256 L264,120 L376,120 L184,312 Z" />
+
+        <!-- Flutter Lower Wing: Electric Purple -->
+        <path
+            android:fillColor="#A855F7"
+            android:pathData="M220,348 L292,420 L376,420 L258,302 L312,248 L258,248 Z" />
+
+        <!-- Electric Lightning Tracer Seam: Cyan Glow Base -->
+        <path
+            android:fillColor="#00E5FF"
+            android:pathData="M330,154 L242,246 L282,246 L204,334 L230,286 L194,286 Z" />
+
+        <!-- Lightning Center Hot Core -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M324,162 L248,242 L278,242 L214,318 L232,284 L204,284 Z" />
+    </group>
 </vector>
