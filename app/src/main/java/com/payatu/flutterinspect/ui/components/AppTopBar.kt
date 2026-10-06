@@ -58,10 +58,10 @@ fun AppTopBar(
 
                 Column {
                     Text(
-                        text = "DEFLUTTER",
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        text = "deFlutter",
+                        style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.5.sp
                         ),
                         color = TextPrimary
                     )

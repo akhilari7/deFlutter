@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FlutterInspect — Web Terminal & AOT Inspector</title>
+    <title>deFlutter — Web Terminal & AOT Inspector</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <style>
         :root {
@@ -413,7 +413,7 @@
             background: rgba(255, 255, 255, 0.03);
         }
 
-        /* Color classes matching FlutterInspect mobile app */
+        /* Color classes matching deFlutter mobile app */
         .log-hit { color: var(--amber); font-weight: bold; }
         .log-return { color: var(--emerald); font-weight: bold; }
         .log-arg-lbl { color: var(--cyan); font-weight: 600; }
@@ -651,7 +651,7 @@
                 </svg>
             </div>
             <div>
-                <div class="brand-title">DEFLUTTER</div>
+                <div class="brand-title">deFlutter</div>
                 <div class="brand-subtitle">Dart AOT Web Terminal</div>
             </div>
         </div>
@@ -817,7 +817,7 @@
                         </div>
                     </div>
                     <div class="step-desc">
-                        Select an installed app from your device or specify a package name. Deflutter uses root access to locate the APK, extract <code>libapp.so</code>, and stream it to your browser—no manual adb commands required.
+                        Select an installed app from your device or specify a package name. deFlutter uses root access to locate the APK, extract <code>libapp.so</code>, and stream it to your browser—no manual adb commands required.
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
@@ -1091,7 +1091,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             ws.onopen = () => {
                 badge.textContent = 'Live Streaming';
                 badge.className = 'badge badge-live';
-                showToast('Connected to Deflutter Tracer!');
+                showToast('Connected to deFlutter Tracer!');
             };
 
             ws.onmessage = (event) => {

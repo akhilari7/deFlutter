@@ -4,7 +4,7 @@
 
 SKIPUNZIP=1
 
-ui_print "- FlutterInspect"
+ui_print "- deFlutter (Zygisk Native Module)"
 ui_print "  by Akshay Khilari"
 ui_print "- Extracting module files"
 

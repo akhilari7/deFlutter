@@ -52,7 +52,7 @@ dependencies {
 
 tasks.register<Zip>("packageMagiskZip") {
     dependsOn("stripReleaseDebugSymbols")
-    archiveBaseName.set("FlutterInspect")
+    archiveFileName.set("deFlutter-v2.0.0-zygisk.zip")
     destinationDirectory.set(rootProject.layout.projectDirectory.dir("dist"))
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
