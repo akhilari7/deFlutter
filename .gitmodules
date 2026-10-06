@@ -1,0 +1,4 @@
+[submodule "module/src/main/cpp/third_party/capstone"]
+	path = module/src/main/cpp/third_party/capstone
+	url = https://github.com/capstone-engine/capstone.git
+	branch = next

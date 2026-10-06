@@ -1,0 +1,43 @@
+# Gradle & Build Artifacts
+.gradle/
+build/
+app/build/
+module/build/
+*/build/
+.cxx/
+*/.cxx/
+.externalNativeBuild/
+
+# Local Android Studio / SDK properties
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+
+# Temporary work directories & large analysis caches
+lib/
+scratch/
+workspace/
+scripts/workspace/
+scripts/temp/
+backups/
+*.log
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Temporary testing screenshots in dist
+dist/screen_*.png
+snap_test.png

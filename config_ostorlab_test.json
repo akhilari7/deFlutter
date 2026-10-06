@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "target_packages": ["co.ostorlab.insecure_app"],
+  "mode": "keyword_search",
+  "keywords": [
+    "command"
+  ]
+}

@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlutterInspect — Web Terminal & AOT Inspector</title>
+    <style>
+        :root {
+            --bg-base: #06090e;
+            --bg-surface: #0d121d;
+            --bg-surface-var: #151d2d;
+            --bg-terminal: #070a10;
+            --border: #222f44;
+            --border-highlight: #3b82f6;
+            --cyan: #00e5ff;
+            --cyan-glow: rgba(0, 229, 255, 0.2);
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.2);
+            --purple: #8b5cf6;
+            --purple-glow: rgba(139, 92, 246, 0.2);
+            --amber: #f59e0b;
+            --rose: #f43f5e;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--cyan), var(--purple));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: var(--bg-base);
+            font-size: 16px;
+            box-shadow: 0 0 16px var(--cyan-glow);
+        }
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            background: linear-gradient(90deg, #ffffff, var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 12px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+        }
+
+        .badge-live {
+            color: var(--emerald);
+            border-color: rgba(16, 185, 129, 0.4);
+            background: var(--emerald-glow);
+        }
+
+        .badge-live::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--emerald);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--emerald);
+            animation: pulse 1.5s infinite;
+        }
+
+        .badge-purple {
+            color: var(--purple);
+            border-color: rgba(139, 92, 246, 0.4);
+            background: var(--purple-glow);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-base);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--bg-surface-var);
+            color: var(--cyan);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            box-shadow: 0 0 10px var(--cyan-glow);
+        }
+
+        main {
+            flex: 1;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            flex: 1;
+        }
+
+        .tab-pane.active {
+            display: flex;
+        }
+
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        /* Terminal Panel */
+        .terminal-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            background: var(--bg-terminal);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .terminal-toolbar {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            background: var(--bg-surface-var);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn.active {
+            background: var(--cyan-glow);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-purple {
+            background: var(--purple-glow);
+            border-color: var(--purple);
+            color: var(--purple);
+        }
+
+        .btn-purple:hover {
+            background: var(--purple);
+            color: #fff;
+        }
+
+        .btn-cyan {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-cyan:hover {
+            background: var(--cyan);
+            color: var(--bg-base);
+        }
+
+        .btn-emerald {
+            background: var(--emerald-glow);
+            border-color: var(--emerald);
+            color: var(--emerald);
+        }
+
+        .btn-emerald:hover {
+            background: var(--emerald);
+            color: var(--bg-base);
+        }
+
+        .btn-rose {
+            color: var(--rose);
+        }
+
+        .btn-rose:hover {
+            border-color: var(--rose);
+            background: rgba(244, 63, 94, 0.15);
+        }
+
+        /* Step Card & Workflow */
+        .step-card {
+            position: relative;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--cyan-glow);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .step-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .step-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+
+        .code-box {
+            background: var(--bg-terminal);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            color: #38bdf8;
+            position: relative;
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+
+        .code-copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .code-copy-btn:hover {
+            color: var(--cyan);
+            border-color: var(--cyan);
+        }
+
+        .dep-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            color: var(--emerald);
+            margin-right: 6px;
+            margin-bottom: 6px;
+        }
+
+        .search-input {
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+            width: 220px;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--cyan);
+        }
+
+        .terminal-screen {
+            flex: 1;
+            min-height: 520px;
+            max-height: calc(100vh - 240px);
+            overflow-y: auto;
+            padding: 16px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .terminal-line {
+            padding: 2px 0;
+            transition: background 0.1s;
+        }
+
+        .terminal-line:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Color classes matching FlutterInspect mobile app */
+        .log-hit { color: var(--amber); font-weight: bold; }
+        .log-return { color: var(--emerald); font-weight: bold; }
+        .log-arg-lbl { color: var(--cyan); font-weight: 600; }
+        .log-slot { color: var(--purple); font-weight: 600; }
+        .log-string { color: #a7f3d0; }
+        .log-meta { color: var(--text-muted); }
+        .log-error { color: var(--rose); }
+
+        /* Symbols Panel */
+        .symbols-header {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .func-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+            gap: 12px;
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .func-card {
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .func-card:hover {
+            border-color: rgba(0, 229, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .func-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .func-offset {
+            font-family: monospace;
+            font-size: 11px;
+            color: var(--cyan);
+            background: var(--cyan-glow);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 229, 255, 0.3);
+        }
+
+        .func-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .func-lib {
+            font-size: 10px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .func-params {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .param-tag {
+            font-family: monospace;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            color: var(--emerald);
+        }
+
+        /* Upload Dropzone */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-surface-var);
+        }
+
+        .dropzone.dragover {
+            border-color: var(--cyan);
+            background: var(--cyan-glow);
+        }
+
+        .dropzone-icon {
+            font-size: 42px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Dart VM Snapshot Panel Styles */
+        .badge-emerald {
+            color: var(--emerald);
+            border-color: rgba(16, 185, 129, 0.4);
+            background: var(--emerald-glow);
+        }
+
+        .snap-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+        }
+
+        .snap-metric-box {
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .snap-metric-val {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .snap-metric-lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .snap-pkg-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 8px;
+            max-height: 520px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .snap-pkg-card {
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .snap-pkg-card:hover {
+            border-color: rgba(0, 229, 255, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .snap-pkg-name {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="brand-icon">⚡</div>
+            <div>
+                <div class="brand-title">DEFLUTTER</div>
+                <div class="brand-subtitle">Dart AOT Web Terminal</div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <span class="badge badge-purple" id="targetBadge">Target: Loading...</span>
+            <span class="badge" id="symbolsBadge">0 Symbols</span>
+            <span class="badge badge-live" id="wsBadge">Connecting...</span>
+        </div>
+
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="terminal" onclick="switchTab('terminal')">Live Terminal</button>
+            <button class="tab-btn" data-tab="symbols" onclick="switchTab('symbols')">Symbols & Functions</button>
+            <button class="tab-btn" data-tab="snapshot" onclick="switchTab('snapshot')">Dart VM Snapshot</button>
+            <button class="tab-btn" data-tab="workflow" onclick="switchTab('workflow')">Toolkit & Workflow</button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- 1. Live Terminal Panel -->
+        <div class="tab-pane active" id="pane-terminal">
+            <div class="terminal-container">
+                <div class="terminal-toolbar">
+                    <div class="toolbar-group">
+                        <button class="btn active" id="cleanBtn" onclick="toggleClean()">Clean Mode</button>
+                        <button class="btn active" id="scrollBtn" onclick="toggleAutoScroll()">Auto-Scroll</button>
+                        <input type="text" class="search-input" id="filterInput" placeholder="Filter console logs..." oninput="applyFilter()">
+                    </div>
+                    <div class="toolbar-group">
+                        <span id="logCount" style="font-size: 11px; color: var(--text-muted);">0 lines</span>
+                        <button class="btn" onclick="copyLogs()">Copy All</button>
+                        <button class="btn btn-rose" onclick="clearTerminal()">Clear</button>
+                    </div>
+                </div>
+                <div class="terminal-screen" id="terminal"></div>
+            </div>
+        </div>
+
+        <!-- 2. Symbols Explorer Panel -->
+        <div class="tab-pane" id="pane-symbols">
+            <div class="card">
+                <div class="symbols-header">
+                    <input type="text" class="search-input" id="symSearch" placeholder="Search functions (e.g. decrypt, AES, login)..." style="flex: 1;" oninput="debounceSearch()">
+                    <span id="searchStats" style="font-size: 12px; color: var(--text-muted);">Loaded symbols</span>
+                </div>
+                <div class="func-list" id="funcList">
+                    <div style="color: var(--text-muted); padding: 20px;">Type a query to search functions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Dart VM Snapshot Panel -->
+        <div class="tab-pane" id="pane-snapshot">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- Snapshot Top Card -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0;">Dart VM Snapshot Metadata</h2>
+                                <span class="badge badge-purple" id="snapKindBadge">kFullAOT</span>
+                                <span class="badge" id="snapMagicBadge" style="font-family: monospace; color: var(--cyan);">0xdcdcf5f5</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;" id="snapSubTitle">
+                                Discovered AOT snapshot binary metadata and embedded Dart packages.
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="snapTargetBadge" class="badge">Target: None</span>
+                            <button class="btn btn-cyan" onclick="loadSnapshot()">↻ Refresh Snapshot</button>
+                        </div>
+                    </div>
+
+                    <!-- Hash & VM Flags Row -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                        <div style="background: var(--bg-surface-var); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Dart SDK Snapshot Hash</div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                <code id="snapSdkHash" style="font-size: 13px; color: var(--emerald); font-family: monospace; word-break: break-all;">--</code>
+                                <button class="btn" style="padding: 4px 8px; font-size: 10px;" onclick="copySdkHash()">Copy</button>
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-surface-var); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">VM Features / Compiler Flags</div>
+                            <div id="snapFeatures" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                <span class="dep-pill">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metric Chips Grid -->
+                    <div class="snap-metric-grid">
+                        <div class="snap-metric-box">
+                            <div class="snap-metric-val" id="snapClusters" style="color: var(--cyan);">--</div>
+                            <div class="snap-metric-lbl">Clusters</div>
+                        </div>
+                        <div class="snap-metric-box">
+                            <div class="snap-metric-val" id="snapObjects" style="color: var(--purple);">--</div>
+                            <div class="snap-metric-lbl">Heap Objects</div>
+                        </div>
+                        <div class="snap-metric-box">
+                            <div class="snap-metric-val" id="snapBaseObjects" style="color: var(--amber);">--</div>
+                            <div class="snap-metric-lbl">Base Objects</div>
+                        </div>
+                        <div class="snap-metric-box">
+                            <div class="snap-metric-val" id="snapInstructionsOffset" style="color: var(--emerald); font-family: monospace; font-size: 15px;">--</div>
+                            <div class="snap-metric-lbl">Instructions Code Offset</div>
+                        </div>
+                    </div>
+
+                    <!-- Memory Addresses Bar -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 14px;">
+                        <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 11px; color: var(--text-muted);">Isolate Data Address:</span>
+                            <code id="snapIsolateData" style="font-size: 12px; color: #93c5fd; font-family: monospace;">--</code>
+                        </div>
+                        <div style="background: var(--bg-base); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 11px; color: var(--text-muted);">Isolate Instructions Address:</span>
+                            <code id="snapIsolateInstr" style="font-size: 12px; color: #93c5fd; font-family: monospace;">--</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discovered Packages & Libraries Card -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <h3 style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">Discovered Snapshot Packages & Libraries</h3>
+                            <span class="badge badge-emerald" id="snapPackagesCount">0 Packages</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" class="search-input" id="snapPkgFilter" placeholder="Filter packages (e.g. tatadigital, dio, crypto)..." style="width: 280px;" oninput="filterSnapshotPackages()">
+                            <button class="btn" onclick="clearPkgFilter()">Clear</button>
+                        </div>
+                    </div>
+
+                    <div id="snapPackagesList" class="snap-pkg-container">
+                        <div style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">
+                            Select an app or click "Refresh Snapshot" to view discovered packages.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Blutter Workflow & Toolkit Panel -->
+        <div class="tab-pane" id="pane-workflow">
+            <div style="max-width: 900px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;">
+                <div style="margin-bottom: 4px;">
+                    <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">AOT Analysis & Blutter Workflow Toolkit</h2>
+                    <p style="font-size: 13px; color: var(--text-secondary);">
+                        Complete end-to-end pipeline: Extract target binaries &rarr; Run Blutter analysis on workstation &rarr; Convert & upload symbols &rarr; Dynamic hooking.
+                    </p>
+                </div>
+
+                <!-- Step 1 Card -->
+                <div class="card step-card">
+                    <div class="step-header">
+                        <div class="step-number">1</div>
+                        <div>
+                            <div class="step-title">Select Target App & Download libapp.so</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Extracts ARM64 AOT snapshot binary directly from the device</div>
+                        </div>
+                    </div>
+                    <div class="step-desc">
+                        Select an installed app from your device or specify a package name. Deflutter uses root access to locate the APK, extract <code>libapp.so</code>, and stream it to your browser—no manual adb commands required.
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                        <div>
+                            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 6px;">Installed Apps (Detected)</label>
+                            <select id="appSelect" class="search-input" style="width: 100%; height: 38px;" onchange="onAppSelected(this.value)">
+                                <option value="">Loading installed apps...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 6px;">Target Package Name</label>
+                            <input type="text" id="targetPkgInput" class="search-input" style="width: 100%; height: 38px;" placeholder="e.g. com.eightksec.droidpass" oninput="onPkgInputChanged(this.value)">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <button class="btn btn-cyan" id="btnDownloadLibApp" onclick="downloadLibApp()" style="padding: 9px 18px; font-size: 12px;">
+                            📥 Download libapp.so
+                        </button>
+                        <button class="btn" id="btnExportLibs" onclick="exportLibsOnly()" style="padding: 9px 14px; font-size: 12px;">
+                            📁 Export to Device SDCard
+                        </button>
+                        <span id="exportStatus" style="font-size: 11px; color: var(--text-muted);"></span>
+                    </div>
+                </div>
+
+                <!-- Step 2 Card -->
+                <div class="card step-card">
+                    <div class="step-header">
+                        <div class="step-number">2</div>
+                        <div>
+                            <div class="step-title">Download blutter2symbols.py & Run Blutter on Workstation</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Reverse-engineers Dart AOT objects and formats function offsets</div>
+                        </div>
+                    </div>
+                    <div class="step-desc">
+                        Run Blutter on your workstation against the downloaded <code>libapp.so</code>, then use our companion Python script to generate a structured <code>symbols.json</code>.
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Script Dependencies</div>
+                        <div>
+                            <span class="dep-pill">✓ Python 3.6+</span>
+                            <span class="dep-pill">✓ Zero pip packages (100% portable)</span>
+                            <span class="dep-pill">✓ Standard Library only: os, sys, re, json, time</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <a href="/api/download-script" download="blutter2symbols.py" class="btn btn-emerald" style="padding: 9px 18px; font-size: 12px; text-decoration: none;">
+                            🐍 Download blutter2symbols.py (Python Script)
+                        </a>
+                    </div>
+
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Run in your workstation terminal:</div>
+                    <div class="code-box">
+                        <button class="code-copy-btn" onclick="copySnippet('codeCli')">Copy</button>
+                        <pre id="codeCli"># 1. Reverse engineer downloaded libapp.so with Blutter
+python blutter.py path/to/libapp.so blutter_out/
+
+# 2. Extract structured symbols JSON using the downloaded script
+python blutter2symbols.py blutter_out/ -o symbols.json</pre>
+                    </div>
+                </div>
+
+                <!-- Step 3 Card -->
+                <div class="card step-card">
+                    <div class="step-header">
+                        <div class="step-number">3</div>
+                        <div>
+                            <div class="step-title">Upload symbols.json & Activate Live Hooking</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Imports class hierarchies, field offsets, and function signatures</div>
+                        </div>
+                    </div>
+                    <div class="step-desc">
+                        Upload the generated <code>symbols.json</code> for target <b id="step3Pkg" style="color: var(--cyan); font-family: monospace;">(select above)</b>. This maps raw function offsets to Dart methods, decodes Class IDs (CIDs), and enables one-click Dobby hooking.
+                    </div>
+
+                    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+                        <span class="dropzone-icon">📁</span>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Click to browse or drag & drop <code>symbols.json</code></div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Max file size: 50MB (Standard Blutter JSON)</div>
+                        <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="handleFile(this.files[0])">
+                    </div>
+
+                    <div id="uploadStatus" style="margin-top: 14px; font-size: 12px; display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        // State
+        let logs = [];
+        let isClean = true;
+        let autoScroll = true;
+        let filterText = "";
+        let ws = null;
+        let activeTarget = "";
+        let currentSnapshot = null;
+        let allSnapshotPackages = [];
+
+        // Tab Switching
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            
+            const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => 
+                b.getAttribute('data-tab') === name || b.textContent.toLowerCase().includes(name)
+            );
+            if (btn) btn.classList.add('active');
+            const pane = document.getElementById('pane-' + name);
+            if (pane) pane.classList.add('active');
+
+            if (name === 'symbols') {
+                searchSymbols(document.getElementById('symSearch') ? document.getElementById('symSearch').value : "");
+            } else if (name === 'snapshot') {
+                loadSnapshot();
+            }
+        }
+
+        // Color coding & Formatting
+        function isValuableLine(line) {
+            const trimmed = line.trimStart();
+            if (!trimmed.startsWith('├──') && !trimmed.startsWith('└──') && !trimmed.startsWith('│')) {
+                return true;
+            }
+            const afterColon = line.includes(': ') ? line.substring(line.indexOf(': ') + 2) : line;
+
+            // Check for decorators:
+            const hasClassDecorator = /cid=0x[0-9a-fA-F]+:\s*[A-Za-z0-9_]/.test(line);
+            const hasParamDecorator = /Arg\d+\s*\((?!0x)[A-Za-z0-9_:]+/.test(line);
+            const hasSlotDecorator = /\[FP[+-]0x[0-9a-fA-F]+\]\s*\((?!0x)[A-Za-z0-9_]+/.test(line);
+
+            // Check for semantic value:
+            const withoutAsciiPreview = afterColon.replace(/\s*\("[^"]*"\)\s*/g, '');
+            const hasSemanticString = withoutAsciiPreview.includes('"');
+            const hasSemanticInt = afterColon.includes('(int)');
+            const hasMap = afterColon.includes('Map(len=');
+
+            return hasClassDecorator || hasParamDecorator || hasSlotDecorator || hasSemanticString || hasSemanticInt || hasMap;
+        }
+
+        function formatLine(line) {
+            let text = line;
+            if (isClean) {
+                text = text.replace(/,\s*0x[0-9a-fA-F]{6,16}/g, '').replace(/\s*\((0x[0-9a-fA-F]{6,16})\)/g, '');
+                if ((text.includes('Uint8List(') || text.includes('Bytes(')) && text.includes('-> [')) {
+                    const withoutAsciiPreview = text.replace(/\s*\("[^"]*"\)\s*/g, '');
+                    if (!(text.includes('Instance(') && withoutAsciiPreview.includes('"'))) {
+                        text = text.replace(/\s*->\s*\[[0-9a-fA-F\s.]+\](?:\s*\("[^"]*"\))?/g, '');
+                    }
+                }
+            }
+
+            const esc = escapeHtml(text);
+
+            if (text.startsWith('[★]') || text.startsWith('[+]') || text.includes('⚡ HIT:')) {
+                return `<div class="terminal-line log-hit">${esc}</div>`;
+            } else if (text.startsWith('[✓]') || text.includes('RETURN:')) {
+                return `<div class="terminal-line log-return">${esc}</div>`;
+            } else if (text.startsWith('[-]') || text.toLowerCase().includes('error')) {
+                return `<div class="terminal-line log-error">${esc}</div>`;
+            } else if (text.includes('├──') || text.includes('└──')) {
+                // Highlight parameter labels and string values
+                const colored = esc
+                    .replace(/(Arg\d+\s*\([^)]+\):)/g, '<span class="log-arg-lbl">$1</span>')
+                    .replace(/(\[FP[+-]0x[0-9a-fA-F]+\]:)/g, '<span class="log-slot">$1</span>')
+                    .replace(/(&quot;[^&]*&quot;)/g, '<span class="log-string">$1</span>');
+                return `<div class="terminal-line">${colored}</div>`;
+            } else if (text.startsWith('[*]')) {
+                return `<div class="terminal-line log-meta">${esc}</div>`;
+            }
+            return `<div class="terminal-line">${esc}</div>`;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function getFilteredLogs() {
+            const rawFiltered = logs.filter(l => {
+                if (filterText && !l.toLowerCase().includes(filterText.toLowerCase())) return false;
+                if (isClean && !isValuableLine(l)) return false;
+                return true;
+            });
+
+            if (!isClean) return rawFiltered;
+
+            const res = [...rawFiltered];
+            for (let i = 0; i < res.length; i++) {
+                const cur = res[i].trimStart();
+                if (cur.startsWith('├──')) {
+                    const nextIsParam = (i + 1 < res.length) && (res[i + 1].trimStart().startsWith('├──') || res[i + 1].trimStart().startsWith('└──'));
+                    if (!nextIsParam) {
+                        res[i] = res[i].replace('├──', '└──');
+                    }
+                }
+            }
+            return res;
+        }
+
+        function renderTerminal() {
+            const terminal = document.getElementById('terminal');
+            const filtered = getFilteredLogs();
+            
+            terminal.innerHTML = filtered.map(formatLine).join('');
+            document.getElementById('logCount').textContent = `${filtered.length} lines`;
+
+            if (autoScroll) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function addLog(line) {
+            if (line === '__CLEAR_LOGS__') {
+                logs = [];
+                renderTerminal();
+                return;
+            }
+            logs.push(line);
+            if (logs.length > 2500) logs.shift();
+
+            renderTerminal();
+        }
+
+        function toggleClean() {
+            isClean = !isClean;
+            const btn = document.getElementById('cleanBtn');
+            btn.classList.toggle('active', isClean);
+            btn.textContent = isClean ? "Clean Mode" : "Verbose Mode";
+            showToast(isClean ? "Clean Mode: hex dumps & raw addresses hidden" : "Verbose Mode: all hex dumps & addresses revealed");
+            renderTerminal();
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('scrollBtn').classList.toggle('active', autoScroll);
+        }
+
+        function applyFilter() {
+            filterText = document.getElementById('filterInput').value;
+            renderTerminal();
+        }
+
+        function clearTerminal() {
+            logs = [];
+            renderTerminal();
+            fetch('/api/clear-console', { method: 'POST' }).catch(() => {});
+        }
+
+        function copyLogs() {
+            navigator.clipboard.writeText(logs.join('\n')).then(() => {
+                showToast('All logs copied to clipboard!');
+            });
+        }
+
+        // WebSocket Connection
+        function connectWs() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/ws/trace`;
+            
+            const badge = document.getElementById('wsBadge');
+            badge.textContent = 'Connecting...';
+            badge.className = 'badge';
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                badge.textContent = 'Live Streaming';
+                badge.className = 'badge badge-live';
+                showToast('Connected to Deflutter Tracer!');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'history' && Array.isArray(data.lines)) {
+                        logs = data.lines;
+                        renderTerminal();
+                    } else if (data.type === 'log') {
+                        addLog(data.line);
+                    } else if (data.type === 'status') {
+                        updateStatus(data);
+                    }
+                } catch {
+                    addLog(event.data);
+                }
+            };
+
+            ws.onclose = () => {
+                badge.textContent = 'Disconnected';
+                badge.className = 'badge badge-rose';
+                setTimeout(connectWs, 3000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        // Status & Metadata Poll
+        function fetchStatus() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(updateStatus)
+                .catch(() => {});
+        }
+
+        function updateStatus(data) {
+            if (data.target) {
+                activeTarget = data.target;
+                document.getElementById('targetBadge').textContent = `Target: ${data.target}`;
+                const snapTargetBadge = document.getElementById('snapTargetBadge');
+                if (snapTargetBadge && (!currentSnapshot || !currentSnapshot.package)) {
+                    snapTargetBadge.textContent = `Target: ${data.target}`;
+                }
+                const pkgInput = document.getElementById('targetPkgInput');
+                if (pkgInput && !pkgInput.value) {
+                    pkgInput.value = data.target;
+                    onPkgInputChanged(data.target);
+                }
+                const sel = document.getElementById('appSelect');
+                if (sel && sel.value !== data.target && data.target) {
+                    sel.value = data.target;
+                }
+            }
+            if (data.functionsCount !== undefined) {
+                document.getElementById('symbolsBadge').textContent = `${data.functionsCount} Symbols (${data.classesCount || 0} Classes)`;
+            }
+        }
+
+        // App Listing & Target Selection
+        function loadAppsList() {
+            fetch('/api/apps')
+                .then(r => r.json())
+                .then(apps => {
+                    const sel = document.getElementById('appSelect');
+                    if (!sel) return;
+                    sel.innerHTML = '<option value="">-- Choose Installed Application --</option>';
+                    apps.forEach(app => {
+                        const opt = document.createElement('option');
+                        opt.value = app.packageName;
+                        opt.textContent = `${app.appName} (${app.packageName})${app.isFlutter ? ' ⚡ [Flutter]' : ''}`;
+                        if (app.packageName === activeTarget) {
+                            opt.selected = true;
+                        }
+                        sel.appendChild(opt);
+                    });
+                    if (activeTarget) {
+                        const pkgInput = document.getElementById('targetPkgInput');
+                        if (pkgInput && !pkgInput.value) {
+                            pkgInput.value = activeTarget;
+                            onPkgInputChanged(activeTarget);
+                        }
+                    }
+                })
+                .catch(() => {
+                    const sel = document.getElementById('appSelect');
+                    if (sel) sel.innerHTML = '<option value="">Could not load apps list</option>';
+                });
+        }
+
+        function onAppSelected(pkg) {
+            if (!pkg) return;
+            const input = document.getElementById('targetPkgInput');
+            if (input) input.value = pkg;
+            onPkgInputChanged(pkg);
+            const snapPane = document.getElementById('pane-snapshot');
+            if (snapPane && snapPane.classList.contains('active')) {
+                loadSnapshot(pkg);
+            }
+        }
+
+        function onPkgInputChanged(pkg) {
+            const p = (pkg || '').trim();
+            const step3 = document.getElementById('step3Pkg');
+            if (step3) step3.textContent = p || '(none selected)';
+        }
+
+        // Direct Download of libapp.so
+        function downloadLibApp() {
+            const pkgInput = document.getElementById('targetPkgInput');
+            const pkg = (pkgInput ? pkgInput.value.trim() : '') || activeTarget;
+            if (!pkg) {
+                showToast('Please select or specify a package name first.');
+                return;
+            }
+
+            const btn = document.getElementById('btnDownloadLibApp');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '⏳ Extracting & Preparing...';
+            btn.disabled = true;
+
+            showToast(`Extracting libapp.so for ${pkg}...`);
+            const dlUrl = `/api/download-libapp?pkg=${encodeURIComponent(pkg)}`;
+
+            const a = document.createElement('a');
+            a.href = dlUrl;
+            a.download = `${pkg}_libapp.so`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            setTimeout(() => {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                showToast(`libapp.so download initiated for ${pkg}`);
+            }, 3000);
+        }
+
+        // Export Libs Device-Side
+        function exportLibsOnly() {
+            const pkgInput = document.getElementById('targetPkgInput');
+            const pkg = (pkgInput ? pkgInput.value.trim() : '') || activeTarget;
+            if (!pkg) {
+                showToast('Please select or specify a package name first.');
+                return;
+            }
+
+            const status = document.getElementById('exportStatus');
+            if (status) status.textContent = 'Exporting native libraries...';
+
+            fetch(`/api/export-libs?pkg=${encodeURIComponent(pkg)}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        if (status) status.textContent = `✓ Exported to ${res.path}`;
+                        showToast(`Exported libapp.so to ${res.path}`);
+                    } else {
+                        if (status) status.textContent = `✗ ${res.error}`;
+                        showToast(`Export failed: ${res.error}`);
+                    }
+                })
+                .catch(err => {
+                    if (status) status.textContent = `✗ ${err}`;
+                });
+        }
+
+        function copySnippet(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            navigator.clipboard.writeText(el.textContent).then(() => {
+                showToast('CLI commands copied to clipboard!');
+            });
+        }
+
+        // Symbols Search & One-Click Hook
+        let searchTimeout = null;
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchSymbols(document.getElementById('symSearch').value);
+            }, 250);
+        }
+
+        function searchSymbols(query) {
+            fetch(`/api/functions?q=${encodeURIComponent(query)}&limit=50`)
+                .then(r => r.json())
+                .then(funcs => {
+                    const list = document.getElementById('funcList');
+                    document.getElementById('searchStats').textContent = `${funcs.length} functions found`;
+                    if (!funcs.length) {
+                        list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No matching functions found.</div>';
+                        return;
+                    }
+                    list.innerHTML = funcs.map(f => `
+                        <div class="func-card">
+                            <div class="func-top">
+                                <span class="func-offset">${f.offset}</span>
+                                <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}')">⚡ Hook Dobby</button>
+                            </div>
+                            <div class="func-name">${escapeHtml(f.name)}</div>
+                            <div class="func-lib">${escapeHtml(f.lib || f.className || '')}</div>
+                            ${f.params && f.params.length ? `
+                                <div class="func-params">
+                                    ${f.params.map(p => `<span class="param-tag">${escapeHtml(p.name)}: ${escapeHtml(p.type)}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                });
+        }
+
+        function hookFunction(offset, name) {
+            fetch('/api/hooks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'add', offset: offset, name: name })
+            })
+            .then(r => r.json())
+            .then(res => {
+                showToast(res.message || `Hook dispatched for ${name}!`);
+                switchTab('terminal');
+            })
+            .catch(err => {
+                showToast(`Failed to dispatch hook: ${err}`);
+            });
+        }
+
+        // Blutter File Upload
+        function handleFile(file) {
+            if (!file) return;
+            const pkgInput = document.getElementById('targetPkgInput');
+            const pkg = (pkgInput ? pkgInput.value.trim() : '') || activeTarget;
+            const status = document.getElementById('uploadStatus');
+            status.style.display = 'block';
+            status.innerHTML = `<span style="color: var(--cyan);">Reading ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...</span>`;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                status.innerHTML = `<span style="color: var(--amber);">Uploading to device and applying symbols...</span>`;
+                fetch(`/api/upload-symbols?pkg=${encodeURIComponent(pkg)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: e.target.result
+                })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        status.innerHTML = `
+                            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--emerald); border-radius: 8px; padding: 14px; margin-top: 8px;">
+                                <div style="color: var(--emerald); font-weight: 700; margin-bottom: 4px;">✓ ${res.message}</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Successfully indexed ${res.functions} functions and ${res.classes} classes.</div>
+                                <button class="btn btn-purple" onclick="switchTab('symbols')">🔍 Open Symbols Explorer & Hook Functions &rarr;</button>
+                            </div>
+                        `;
+                        showToast(`Symbols applied: ${res.functions} funcs, ${res.classes} classes!`);
+                        fetchStatus();
+                    } else {
+                        status.innerHTML = `<span style="color: var(--rose);">✗ Failed: ${res.error}</span>`;
+                    }
+                })
+                .catch(err => {
+                    status.innerHTML = `<span style="color: var(--rose);">✗ Upload error: ${err}</span>`;
+                });
+            };
+            reader.readAsText(file);
+        }
+
+        // Drag & Drop
+        const dropzone = document.getElementById('dropzone');
+        ['dragenter', 'dragover'].forEach(n => {
+            dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        });
+        ['dragleave', 'drop'].forEach(n => {
+            dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+        });
+        dropzone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length) handleFile(files[0]);
+        });
+
+        // Dart VM Snapshot Management
+        function loadSnapshot(pkg) {
+            const pkgInput = document.getElementById('targetPkgInput');
+            const target = pkg || (pkgInput ? pkgInput.value.trim() : '') || activeTarget;
+            const list = document.getElementById('snapPackagesList');
+            if (list) {
+                list.innerHTML = '<div style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">Loading snapshot metadata...</div>';
+            }
+            fetch(`/api/snapshot?pkg=${encodeURIComponent(target)}`)
+                .then(r => r.json())
+                .then(data => {
+                    currentSnapshot = data;
+                    renderSnapshot(data);
+                })
+                .catch(err => {
+                    if (list) {
+                        list.innerHTML = `<div style="color: var(--rose); padding: 24px; text-align: center; grid-column: 1 / -1;">Failed to fetch snapshot: ${escapeHtml(String(err))}</div>`;
+                    }
+                });
+        }
+
+        function renderSnapshot(data) {
+            const targetBadge = document.getElementById('snapTargetBadge');
+            if (targetBadge) {
+                targetBadge.textContent = `Target: ${data.package || activeTarget || 'None'}`;
+            }
+
+            if (!data.valid) {
+                document.getElementById('snapKindBadge').textContent = 'Unknown';
+                document.getElementById('snapMagicBadge').textContent = '--';
+                document.getElementById('snapSdkHash').textContent = '--';
+                document.getElementById('snapFeatures').innerHTML = '<span class="dep-pill">N/A</span>';
+                document.getElementById('snapClusters').textContent = '0';
+                document.getElementById('snapObjects').textContent = '0';
+                document.getElementById('snapBaseObjects').textContent = '0';
+                document.getElementById('snapInstructionsOffset').textContent = '--';
+                document.getElementById('snapIsolateData').textContent = '--';
+                document.getElementById('snapIsolateInstr').textContent = '--';
+                document.getElementById('snapPackagesCount').textContent = '0 Packages';
+                document.getElementById('snapPackagesList').innerHTML = `
+                    <div style="color: var(--text-muted); padding: 32px; text-align: center; grid-column: 1 / -1;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🔍</div>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">No Snapshot Found for ${escapeHtml(data.package || 'active target')}</div>
+                        <div style="font-size: 12px; max-width: 500px; margin: 0 auto 16px;">${escapeHtml(data.message || 'Run a discovery scan or restart target app to dump live Dart snapshot metadata.')}</div>
+                    </div>
+                `;
+                allSnapshotPackages = [];
+                return;
+            }
+
+            document.getElementById('snapKindBadge').textContent = data.kind || 'kFullAOT';
+            document.getElementById('snapMagicBadge').textContent = data.magic || '--';
+            document.getElementById('snapSdkHash').textContent = data.hash || '--';
+
+            // VM Compiler Flags
+            const featContainer = document.getElementById('snapFeatures');
+            if (featContainer) {
+                const feats = (data.features || '').split(/\s+/).filter(Boolean);
+                if (feats.length) {
+                    featContainer.innerHTML = feats.map(f => `<span class="dep-pill">✓ ${escapeHtml(f)}</span>`).join('');
+                } else {
+                    featContainer.innerHTML = '<span class="dep-pill">Standard / AOT</span>';
+                }
+            }
+
+            document.getElementById('snapClusters').textContent = (data.numClusters || 0).toLocaleString();
+            document.getElementById('snapObjects').textContent = (data.numObjects || 0).toLocaleString();
+            document.getElementById('snapBaseObjects').textContent = (data.numBaseObjects || 0).toLocaleString();
+            document.getElementById('snapInstructionsOffset').textContent = data.instructionsOffset || '--';
+            document.getElementById('snapIsolateData').textContent = data.isolateDataAddr || '--';
+            document.getElementById('snapIsolateInstr').textContent = data.isolateInstructionsAddr || '--';
+
+            allSnapshotPackages = Array.isArray(data.symbols) ? data.symbols : [];
+            document.getElementById('snapPackagesCount').textContent = `${allSnapshotPackages.length.toLocaleString()} Packages`;
+            renderSnapshotPackages(allSnapshotPackages);
+        }
+
+        function renderSnapshotPackages(list) {
+            const container = document.getElementById('snapPackagesList');
+            if (!container) return;
+
+            if (!list || !list.length) {
+                container.innerHTML = '<div style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">No matching snapshot packages found.</div>';
+                return;
+            }
+
+            const maxDisplay = 250;
+            const displayList = list.slice(0, maxDisplay);
+            const truncatedNote = list.length > maxDisplay 
+                ? `<div style="grid-column: 1 / -1; padding: 8px 12px; background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px; font-size: 11px; color: var(--cyan); text-align: center;">
+                     Showing first ${maxDisplay} of ${list.length.toLocaleString()} packages. Use the search box above to filter libraries.
+                   </div>`
+                : '';
+
+            container.innerHTML = displayList.map(pkg => `
+                <div class="snap-pkg-card">
+                    <span class="snap-pkg-name" title="${escapeHtml(pkg)}">${escapeHtml(pkg)}</span>
+                    <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+                        <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="copyPackageName('${escapeHtml(pkg)}')" title="Copy Package URI">📋</button>
+                        <button class="btn btn-purple" style="padding: 2px 8px; font-size: 10px;" onclick="inspectPackageInSymbols('${escapeHtml(pkg)}')" title="Filter functions by this package">🔍 Symbols</button>
+                    </div>
+                </div>
+            `).join('') + truncatedNote;
+        }
+
+        function filterSnapshotPackages() {
+            const query = (document.getElementById('snapPkgFilter') ? document.getElementById('snapPkgFilter').value : '').toLowerCase().trim();
+            if (!query) {
+                renderSnapshotPackages(allSnapshotPackages);
+                return;
+            }
+            const filtered = allSnapshotPackages.filter(p => p.toLowerCase().includes(query));
+            renderSnapshotPackages(filtered);
+        }
+
+        function clearPkgFilter() {
+            const input = document.getElementById('snapPkgFilter');
+            if (input) input.value = '';
+            renderSnapshotPackages(allSnapshotPackages);
+        }
+
+        function copySdkHash() {
+            const h = (currentSnapshot && currentSnapshot.hash) || document.getElementById('snapSdkHash').textContent;
+            if (!h || h === '--') return;
+            navigator.clipboard.writeText(h).then(() => {
+                showToast(`SDK Hash copied: ${h}`);
+            });
+        }
+
+        function copyPackageName(pkg) {
+            navigator.clipboard.writeText(pkg).then(() => {
+                showToast(`Copied ${pkg}`);
+            });
+        }
+
+        function inspectPackageInSymbols(pkgName) {
+            let term = pkgName.replace(/^package:/, '').split('/')[0].replace(/\.dart$/, '');
+            const symInput = document.getElementById('symSearch');
+            if (symInput) {
+                symInput.value = term;
+            }
+            switchTab('symbols');
+            showToast(`Filtering symbols for ${term}...`);
+        }
+
+        // Toast Helper
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        // Init
+        window.addEventListener('load', () => {
+            connectWs();
+            fetchStatus();
+            loadAppsList();
+            setInterval(fetchStatus, 5000);
+        });
+    </script>
+</body>
+</html>
