@@ -127,6 +127,18 @@ fun ConfigScreen(
 
     val keywordPresets = listOf("command", "login", "http", "token", "auth", "crypto", "secret", "user")
 
+    // Frida Engine State
+    var fridaStatus by remember { mutableStateOf<FridaInstaller.FridaStatus?>(null) }
+    var isCheckingFrida by remember { mutableStateOf(false) }
+    var isInstallingFrida by remember { mutableStateOf(false) }
+    var fridaInstallProgress by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        isCheckingFrida = true
+        fridaStatus = FridaInstaller.checkStatus()
+        isCheckingFrida = false
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -402,7 +414,374 @@ fun ConfigScreen(
             }
         }
 
-        // Section: Live Discovery Mode (rodata heuristic scanner)
+        // Section: Frida-Inject Engine Status & On-Device Installer
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SlateSurface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.5f) else SlateBorder,
+                    RoundedCornerShape(12.dp)
+                )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "FRIDA-INJECT ENGINE",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.15f)
+                                            else AmberWarning.copy(alpha = 0.15f)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isCheckingFrida -> "CHECKING..."
+                                            fridaStatus?.isInstalled == true -> "v${fridaStatus?.version ?: "ACTIVE"}"
+                                            else -> "NOT FOUND"
+                                        },
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (fridaStatus?.isInstalled == true)
+                                    "Ready at /data/local/tmp/frida-inject • Standalone on-device engine"
+                                else
+                                    "Required for Frida JS Interceptor. 1-tap download from GitHub releases",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = TextSecondary
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                isCheckingFrida = true
+                                fridaStatus = FridaInstaller.checkStatus()
+                                isCheckingFrida = false
+                            }
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (isInstallingFrida) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SlateSurfaceVariant)
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = CyanPrimary,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = fridaInstallProgress.ifBlank { "Installing frida-inject..." },
+                                fontSize = 11.sp,
+                                color = CyanPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else if (fridaStatus?.isInstalled == false) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isInstallingFrida = true
+                                val res = FridaInstaller.downloadAndInstall(context.cacheDir) { progress ->
+                                    fridaInstallProgress = progress
+                                }
+                                isInstallingFrida = false
+                                if (res.isSuccess) {
+                                    fridaStatus = FridaInstaller.checkStatus()
+                                    Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Install failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(38.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = SlateBackground, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "INSTALL FRIDA-INJECT (AUTO-FETCH LATEST)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SlateBackground
+                        )
+                    }
+                }
+            }
+        }
+
+        // Section: Embedded Web Terminal & Workstation Server (Port 8088)
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = SlateSurface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (isServerRunning) EmeraldSuccess.copy(alpha = 0.5f) else SlateBorder,
+                    RoundedCornerShape(12.dp)
+                )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = if (isServerRunning) EmeraldSuccess else CyanPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "WEB TERMINAL SERVER",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (isServerRunning) EmeraldSuccess.copy(alpha = 0.15f)
+                                            else SlateSurfaceVariant
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (isServerRunning) ":8088 ONLINE" else "OFFLINE",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isServerRunning) EmeraldSuccess else TextMuted
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (isServerRunning) "$connectedClients client(s) connected • streaming live logs"
+                                       else "Stream trace logs & manage hooks from desktop browser",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = if (isServerRunning) EmeraldSuccess else TextSecondary
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = isServerRunning,
+                        onCheckedChange = { startServer ->
+                            val prefs = context.getSharedPreferences("flutterinspect_prefs", Context.MODE_PRIVATE)
+                            prefs.edit().putBoolean("web_server_enabled", startServer).apply()
+                            if (startServer) {
+                                val res = WebTerminalServer.start(context.applicationContext)
+                                if (res.isFailure) {
+                                    Toast.makeText(context, "Failed to start server: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Web Terminal started on port 8088", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                WebTerminalServer.stop()
+                                Toast.makeText(context, "Web Terminal stopped", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = EmeraldSuccess,
+                            checkedTrackColor = EmeraldSuccess.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+
+                if (isServerRunning) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = SlateBorder.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "WORKSTATION ACCESS OPTIONS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                        color = TextMuted
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Method 1: ADB Port Forward (USB)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SlateSurfaceVariant)
+                            .padding(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "USB / ADB Forward (Recommended)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = CyanPrimary
+                            )
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("ADB Command", "adb forward tcp:8088 tcp:8088"))
+                                    Toast.makeText(context, "Copied 'adb forward tcp:8088 tcp:8088'", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy command", tint = TextMuted, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(SlateBackground.copy(alpha = 0.6f))
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "$ adb forward tcp:8088 tcp:8088",
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldSuccess
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Browser: http://localhost:8088",
+                                fontSize = 11.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                color = TextSecondary
+                            )
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("URL", "http://localhost:8088"))
+                                    Toast.makeText(context, "Copied URL to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy URL", tint = TextMuted, modifier = Modifier.size(13.dp))
+                            }
+                        }
+                    }
+
+                    // Method 2: Wi-Fi IP
+                    if (deviceIps.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SlateSurfaceVariant)
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "Local Wi-Fi Network Access",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = PurpleHighlight
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            deviceIps.forEach { ip ->
+                                val url = "http://$ip:8088"
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = url,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextPrimary
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("URL", url))
+                                            Toast.makeText(context, "Copied $url to clipboard", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy URL", tint = TextMuted, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section: Live Discovery Mode (rodata heuristic scanner) - Placed at bottom before Deploy
         Card(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = SlateSurface),
@@ -721,377 +1100,6 @@ fun ConfigScreen(
                                 selectedContainerColor = CyanPrimary.copy(alpha = 0.2f),
                                 selectedLabelColor = CyanPrimary
                             )
-                        )
-                    }
-                }
-            }
-        }
-
-        // Section: Embedded Web Terminal & Workstation Server (Port 8088)
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = SlateSurface),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    1.dp,
-                    if (isServerRunning) EmeraldSuccess.copy(alpha = 0.5f) else SlateBorder,
-                    RoundedCornerShape(12.dp)
-                )
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Language,
-                            contentDescription = null,
-                            tint = if (isServerRunning) EmeraldSuccess else CyanPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "WEB TERMINAL SERVER",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                                    color = TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            if (isServerRunning) EmeraldSuccess.copy(alpha = 0.15f)
-                                            else SlateSurfaceVariant
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = if (isServerRunning) ":8088 ONLINE" else "OFFLINE",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isServerRunning) EmeraldSuccess else TextMuted
-                                    )
-                                }
-                            }
-                            Text(
-                                text = if (isServerRunning) "$connectedClients client(s) connected • streaming live logs"
-                                       else "Stream trace logs & manage hooks from desktop browser",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                color = if (isServerRunning) EmeraldSuccess else TextSecondary
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = isServerRunning,
-                        onCheckedChange = { startServer ->
-                            val prefs = context.getSharedPreferences("flutterinspect_prefs", Context.MODE_PRIVATE)
-                            prefs.edit().putBoolean("web_server_enabled", startServer).apply()
-                            if (startServer) {
-                                val res = WebTerminalServer.start(context.applicationContext)
-                                if (res.isFailure) {
-                                    Toast.makeText(context, "Failed to start server: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "Web Terminal started on port 8088", Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                WebTerminalServer.stop()
-                                Toast.makeText(context, "Web Terminal stopped", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = EmeraldSuccess,
-                            checkedTrackColor = EmeraldSuccess.copy(alpha = 0.3f)
-                        )
-                    )
-                }
-
-                if (isServerRunning) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    HorizontalDivider(color = SlateBorder.copy(alpha = 0.5f))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "WORKSTATION ACCESS OPTIONS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                        color = TextMuted
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Method 1: ADB Port Forward (USB)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SlateSurfaceVariant)
-                            .padding(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "USB / ADB Forward (Recommended)",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = CyanPrimary
-                            )
-                            IconButton(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("ADB Command", "adb forward tcp:8088 tcp:8088"))
-                                    Toast.makeText(context, "Copied 'adb forward tcp:8088 tcp:8088'", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy command", tint = TextMuted, modifier = Modifier.size(14.dp))
-                            }
-                        }
-                        Text(
-                            text = "Terminal: adb forward tcp:8088 tcp:8088",
-                            fontSize = 10.sp,
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "http://localhost:8088",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            TextButton(
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://localhost:8088"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("URL", "http://localhost:8088"))
-                                        Toast.makeText(context, "Copied URL to clipboard", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
-                            ) {
-                                Text("Open in Browser", fontSize = 11.sp, color = CyanPrimary)
-                            }
-                        }
-                    }
-
-                    // Method 2: Wi-Fi IP
-                    if (deviceIps.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SlateSurfaceVariant)
-                                .padding(10.dp)
-                        ) {
-                            Text(
-                                text = "Local Wi-Fi Network Access",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = PurpleHighlight
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            deviceIps.forEach { ip ->
-                                val url = "http://$ip:8088"
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = url,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = TextPrimary
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("URL", url))
-                                            Toast.makeText(context, "Copied $url to clipboard", Toast.LENGTH_SHORT).show()
-                                        },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy URL", tint = TextMuted, modifier = Modifier.size(14.dp))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Section: Frida Engine Status & On-Device Installer
-        var fridaStatus by remember { mutableStateOf<FridaInstaller.FridaStatus?>(null) }
-        var isCheckingFrida by remember { mutableStateOf(false) }
-        var isInstallingFrida by remember { mutableStateOf(false) }
-        var fridaInstallProgress by remember { mutableStateOf("") }
-
-        LaunchedEffect(Unit) {
-            isCheckingFrida = true
-            fridaStatus = FridaInstaller.checkStatus()
-            isCheckingFrida = false
-        }
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = SlateSurface),
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    1.dp,
-                    if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.5f) else SlateBorder,
-                    RoundedCornerShape(12.dp)
-                )
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = null,
-                            tint = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "FRIDA-INJECT ENGINE",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                                    color = TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            if (fridaStatus?.isInstalled == true) CyanPrimary.copy(alpha = 0.15f)
-                                            else AmberWarning.copy(alpha = 0.15f)
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = when {
-                                            isCheckingFrida -> "CHECKING..."
-                                            fridaStatus?.isInstalled == true -> "v${fridaStatus?.version ?: "ACTIVE"}"
-                                            else -> "NOT FOUND"
-                                        },
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (fridaStatus?.isInstalled == true) CyanPrimary else AmberWarning
-                                    )
-                                }
-                            }
-                            Text(
-                                text = if (fridaStatus?.isInstalled == true)
-                                    "Ready at /data/local/tmp/frida-inject • Standalone on-device engine"
-                                else
-                                    "Required for Frida JS Interceptor. 1-tap download from GitHub releases",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                color = TextSecondary
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                isCheckingFrida = true
-                                fridaStatus = FridaInstaller.checkStatus()
-                                isCheckingFrida = false
-                            }
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                if (isInstallingFrida) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SlateSurfaceVariant)
-                            .padding(10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
-                                color = CyanPrimary,
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = fridaInstallProgress.ifBlank { "Installing frida-inject..." },
-                                fontSize = 11.sp,
-                                color = CyanPrimary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                } else if (fridaStatus?.isInstalled == false) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                isInstallingFrida = true
-                                val res = FridaInstaller.downloadAndInstall(context.cacheDir) { progress ->
-                                    fridaInstallProgress = progress
-                                }
-                                isInstallingFrida = false
-                                if (res.isSuccess) {
-                                    fridaStatus = FridaInstaller.checkStatus()
-                                    Toast.makeText(context, res.getOrNull(), Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Install failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(38.dp)
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = SlateBackground, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "INSTALL FRIDA-INJECT (AUTO-FETCH LATEST)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SlateBackground
                         )
                     }
                 }

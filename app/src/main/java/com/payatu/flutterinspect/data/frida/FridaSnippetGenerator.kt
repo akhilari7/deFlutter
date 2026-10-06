@@ -698,7 +698,7 @@ object FridaSnippetGenerator {
     }
 
     private fun generateBatchHook(targetLib: String, funcs: List<FunctionEntry>, isVerbose: Boolean): String {
-        val targetsJson = funcs.take(30).map { f ->
+        val targetsJson = funcs.take(20).map { f ->
             "    { name: \"${f.name.replace("\"", "\\\"")}\", offset: ${f.offset} }"
         }.joinToString(",\n")
 
@@ -717,7 +717,7 @@ object FridaSnippetGenerator {
         return """
             /**
              * FlutterInspect Batch Hook Script
-             * Targets: ${funcs.size} resolved Dart functions in $targetLib
+             * Targets: ${funcs.take(20).size} resolved Dart functions in $targetLib (capped to top 20 for stability)
              * Verbose: $isVerbose
              */
             'use strict';

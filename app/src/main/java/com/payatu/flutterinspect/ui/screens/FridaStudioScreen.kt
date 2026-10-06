@@ -133,9 +133,9 @@ fun FridaStudioScreen(
 
     val effectiveBatchFuncs = remember(selectedFunction, batchFunctions, allFunctions) {
         if (selectedFunction == null && batchFunctions.isNotEmpty()) {
-            batchFunctions
+            batchFunctions.take(20)
         } else {
-            allFunctions
+            allFunctions.take(20)
         }
     }
 
