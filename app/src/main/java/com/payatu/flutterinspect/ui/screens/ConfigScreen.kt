@@ -1111,25 +1111,27 @@ fun ConfigScreen(
         // Action Buttons
         val hasTargetProcess = config.process.isNotBlank()
 
-        Button(
-            onClick = onSaveConfig,
-            enabled = !isSaving && hasTargetProcess,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = CyanPrimary,
-                disabledContainerColor = SlateBorder.copy(alpha = 0.4f),
-                disabledContentColor = TextMuted
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            if (isSaving) {
-                CircularProgressIndicator(color = SlateBackground, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Default.Save, contentDescription = null, tint = if (hasTargetProcess) SlateBackground else TextMuted)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("DEPLOY CONFIG TO ZYGISK", fontWeight = FontWeight.Bold, color = if (hasTargetProcess) SlateBackground else TextMuted)
+        if (config.discoveryEnabled) {
+            Button(
+                onClick = onSaveConfig,
+                enabled = !isSaving && hasTargetProcess,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CyanPrimary,
+                    disabledContainerColor = SlateBorder.copy(alpha = 0.4f),
+                    disabledContentColor = TextMuted
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(color = SlateBackground, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Save, contentDescription = null, tint = if (hasTargetProcess) SlateBackground else TextMuted)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("DEPLOY DISCOVERY CONFIG TO ZYGISK", fontWeight = FontWeight.Bold, color = if (hasTargetProcess) SlateBackground else TextMuted)
+                }
             }
         }
 
@@ -1156,9 +1158,9 @@ fun ConfigScreen(
         }
 
         if (!config.discoveryEnabled) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "ℹ Live Discovery is OFF (no rodata memory scan). Deploying config attaches Zygisk for native Dobby hooks.",
+                text = "ℹ Live Discovery is OFF. Symbols can be traced directly in Trace Lab. Use 'Save & Restart' only if switching to an app not yet registered with Zygisk.",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                 color = TextSecondary,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
