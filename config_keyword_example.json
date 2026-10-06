@@ -1,6 +1,0 @@
-{
-  "enabled": true,
-  "target_packages": ["com.example.flutterapp"],
-  "mode": "keyword_search",
-  "keywords": ["LoginBloc", "HttpClient", "authenticate", "ApiService"]
-}

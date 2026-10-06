@@ -1,5 +1,0 @@
-{
-  "enabled": true,
-  "target_packages": ["com.example.flutterapp"],
-  "mode": "full_enumerate"
-}
