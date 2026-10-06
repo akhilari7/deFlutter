@@ -18,6 +18,7 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.receiveStream
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondFile
 import io.ktor.server.response.respondText
@@ -112,6 +113,16 @@ object WebTerminalServer {
                             }
                         }
                         call.respondText(html, ContentType.Text.Html)
+                    }
+
+                    // Serve Favicon & Web static assets
+                    get("/favicon.svg") {
+                        try {
+                            val bytes = context.assets.open("web/favicon.svg").use { it.readBytes() }
+                            call.respondBytes(bytes, ContentType.parse("image/svg+xml"))
+                        } catch (_: Exception) {
+                            call.respond(HttpStatusCode.NotFound)
+                        }
                     }
 
                     // REST APIs
