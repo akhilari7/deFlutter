@@ -43,16 +43,19 @@ fun ResultsScreen(
     val context = LocalContext.current
 
     val isSymbolsLoaded by SymbolManager.isLoaded.collectAsState()
+    val loadedPkg by SymbolManager.loadedPackage.collectAsState()
     val allFunctions = scanResult?.functions ?: emptyList()
-    var searchBlutterMode by remember(isDiscoveryEnabled, isSymbolsLoaded, scanResult?.process, allFunctions.size) {
-        mutableStateOf(!isDiscoveryEnabled || (allFunctions.isEmpty() && isSymbolsLoaded))
+    val activePkg = scanResult?.process?.ifBlank { com.payatu.flutterinspect.server.TraceLogBroadcaster.activeTarget.value } ?: com.payatu.flutterinspect.server.TraceLogBroadcaster.activeTarget.value
+    val isSymbolsForActivePkg = isSymbolsLoaded && (loadedPkg.isBlank() || loadedPkg == activePkg)
+
+    var searchBlutterMode by remember(isDiscoveryEnabled, isSymbolsForActivePkg, activePkg, allFunctions.size) {
+        mutableStateOf(!isDiscoveryEnabled || (allFunctions.isEmpty() && isSymbolsForActivePkg))
     }
-    val effectiveBlutterMode = (searchBlutterMode || !isDiscoveryEnabled || allFunctions.isEmpty()) && isSymbolsLoaded
+    val effectiveBlutterMode = (searchBlutterMode || !isDiscoveryEnabled || allFunctions.isEmpty()) && isSymbolsForActivePkg
     var isBatchMode by remember { mutableStateOf(false) }
 
-    val activePkg = scanResult?.process?.ifBlank { com.payatu.flutterinspect.server.TraceLogBroadcaster.activeTarget.value } ?: com.payatu.flutterinspect.server.TraceLogBroadcaster.activeTarget.value
     LaunchedEffect(activePkg) {
-        if (!isSymbolsLoaded && activePkg.isNotBlank()) {
+        if (activePkg.isNotBlank() && (!isSymbolsLoaded || loadedPkg != activePkg)) {
             SymbolManager.autoLoadForPackage(activePkg)
         }
     }

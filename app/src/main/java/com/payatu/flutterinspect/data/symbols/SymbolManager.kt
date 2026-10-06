@@ -367,12 +367,19 @@ object SymbolManager {
             return true
         }
 
+        // If switching from another package, clear old symbols to prevent state bleed
+        if (_loadedPackage.value.isNotBlank() && _loadedPackage.value != packageName) {
+            clear()
+            // Re-apply active snapshot if found for new package
+            if (scanRes?.snapshot != null && scanRes.snapshot.valid) {
+                _activeSnapshot.value = scanRes.snapshot
+            }
+        }
+
         val candidates = mutableListOf<String>()
-        candidates.add("/data/local/tmp/${packageName}_symbols.json")
         candidates.add("/sdcard/Download/FlutterInspect/$packageName/symbols.json")
+        candidates.add("/data/local/tmp/${packageName}_symbols.json")
         candidates.add("/data/local/tmp/$packageName/symbols.json")
-        candidates.add("/sdcard/Download/FlutterInspect/symbols.json")
-        candidates.add("/data/local/tmp/symbols.json")
 
         for (path in candidates) {
             val f = java.io.File(path)
@@ -386,6 +393,9 @@ object SymbolManager {
                 } catch (_: Throwable) {}
             }
         }
+
+        // No package-specific symbols file found -> ensure clean state for this package
+        _loadedPackage.value = packageName
         return false
     }
 
