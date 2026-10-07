@@ -741,6 +741,18 @@
                 <div class="func-list" id="funcList">
                     <div style="color: var(--text-muted); padding: 20px;">Type a query to search functions...</div>
                 </div>
+
+                <!-- Symbols Pagination Bar -->
+                <div class="pagination-bar" id="symPaginationBar" style="display: none;">
+                    <span id="symPageInfo" style="font-family: ui-monospace, monospace; font-size: 11.5px;">Showing 1 - 50 of 0 functions</span>
+                    <div class="pagination-controls">
+                        <button class="pagination-btn" id="symPageFirst" onclick="goToSymPage(1)">« First</button>
+                        <button class="pagination-btn" id="symPagePrev" onclick="changeSymPage(-1)">‹ Prev</button>
+                        <span id="symPageCurrent" style="padding: 0 8px; font-weight: 700; color: var(--cyan); font-family: ui-monospace, monospace; font-size: 11.5px;">Page 1 / 1</span>
+                        <button class="pagination-btn" id="symPageNext" onclick="changeSymPage(1)">Next ›</button>
+                        <button class="pagination-btn" id="symPageLast" onclick="goToSymPage('last')">Last »</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1399,6 +1411,10 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
         // Symbols Search & One-Click Hook
         let searchTimeout = null;
+        let allSymbolFuncs = [];
+        let symPageCurrent = 1;
+        const SYM_PAGE_SIZE = 50;
+
         function debounceSearch() {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
@@ -1407,31 +1423,111 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         }
 
         function searchSymbols(query) {
-            fetch(`/api/functions?q=${encodeURIComponent(query)}&limit=50`)
+            const trimmed = (query || '').trim();
+            const list = document.getElementById('funcList');
+            const paginationBar = document.getElementById('symPaginationBar');
+            const stats = document.getElementById('searchStats');
+
+            if (!trimmed) {
+                allSymbolFuncs = [];
+                if (stats) stats.textContent = '0 functions found';
+                if (list) list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Type a query to search functions...</div>';
+                if (paginationBar) paginationBar.style.display = 'none';
+                return;
+            }
+
+            if (list) list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Searching symbols...</div>';
+
+            fetch(`/api/functions?q=${encodeURIComponent(trimmed)}&limit=1500`)
                 .then(r => r.json())
                 .then(funcs => {
-                    const list = document.getElementById('funcList');
-                    document.getElementById('searchStats').textContent = `${funcs.length} functions found`;
-                    if (!funcs.length) {
-                        list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No matching functions found.</div>';
-                        return;
+                    allSymbolFuncs = Array.isArray(funcs) ? funcs : [];
+                    if (stats) {
+                        stats.textContent = `${allSymbolFuncs.length.toLocaleString()}${allSymbolFuncs.length >= 1500 ? '+' : ''} functions found`;
                     }
-                    list.innerHTML = funcs.map(f => `
-                        <div class="func-card">
-                            <div class="func-top">
-                                <span class="func-offset">${f.offset}</span>
-                                <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}')">⚡ Hook Dobby</button>
-                            </div>
-                            <div class="func-name">${escapeHtml(f.name)}</div>
-                            <div class="func-lib">${escapeHtml(f.lib || f.className || '')}</div>
-                            ${f.params && f.params.length ? `
-                                <div class="func-params">
-                                    ${f.params.map(p => `<span class="param-tag">${escapeHtml(p.name)}: ${escapeHtml(p.type)}</span>`).join('')}
-                                </div>
-                            ` : ''}
-                        </div>
-                    `).join('');
+                    renderSymbolPage(true);
+                })
+                .catch(err => {
+                    if (list) list.innerHTML = `<div style="color: var(--red); padding: 20px;">Error loading functions: ${escapeHtml(err.message || err)}</div>`;
+                    if (paginationBar) paginationBar.style.display = 'none';
                 });
+        }
+
+        function renderSymbolPage(resetPage = true) {
+            const list = document.getElementById('funcList');
+            const paginationBar = document.getElementById('symPaginationBar');
+            if (!list) return;
+
+            if (resetPage) symPageCurrent = 1;
+
+            if (!allSymbolFuncs.length) {
+                list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No matching functions found.</div>';
+                if (paginationBar) paginationBar.style.display = 'none';
+                return;
+            }
+
+            const totalPages = Math.ceil(allSymbolFuncs.length / SYM_PAGE_SIZE) || 1;
+            if (symPageCurrent < 1) symPageCurrent = 1;
+            if (symPageCurrent > totalPages) symPageCurrent = totalPages;
+
+            const startIndex = (symPageCurrent - 1) * SYM_PAGE_SIZE;
+            const endIndex = Math.min(startIndex + SYM_PAGE_SIZE, allSymbolFuncs.length);
+            const pageItems = allSymbolFuncs.slice(startIndex, endIndex);
+
+            list.innerHTML = pageItems.map(f => `
+                <div class="func-card">
+                    <div class="func-top">
+                        <span class="func-offset">${f.offset}</span>
+                        <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}')">⚡ Hook Dobby</button>
+                    </div>
+                    <div class="func-name">${escapeHtml(f.name)}</div>
+                    <div class="func-lib">${escapeHtml(f.lib || f.className || '')}</div>
+                    ${f.params && f.params.length ? `
+                        <div class="func-params">
+                            ${f.params.map(p => `<span class="param-tag">${escapeHtml(p.name)}: ${escapeHtml(p.type)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+
+            if (paginationBar) {
+                paginationBar.style.display = 'flex';
+                const infoEl = document.getElementById('symPageInfo');
+                if (infoEl) {
+                    infoEl.textContent = `Showing ${(startIndex + 1).toLocaleString()} - ${endIndex.toLocaleString()} of ${allSymbolFuncs.length.toLocaleString()} functions`;
+                }
+                const curEl = document.getElementById('symPageCurrent');
+                if (curEl) {
+                    curEl.textContent = `Page ${symPageCurrent} / ${totalPages}`;
+                }
+                const firstBtn = document.getElementById('symPageFirst');
+                if (firstBtn) firstBtn.disabled = (symPageCurrent === 1);
+                const prevBtn = document.getElementById('symPagePrev');
+                if (prevBtn) prevBtn.disabled = (symPageCurrent === 1);
+                const nextBtn = document.getElementById('symPageNext');
+                if (nextBtn) nextBtn.disabled = (symPageCurrent === totalPages);
+                const lastBtn = document.getElementById('symPageLast');
+                if (lastBtn) lastBtn.disabled = (symPageCurrent === totalPages);
+            }
+        }
+
+        function changeSymPage(delta) {
+            symPageCurrent += delta;
+            renderSymbolPage(false);
+            const list = document.getElementById('funcList');
+            if (list) list.scrollTop = 0;
+        }
+
+        function goToSymPage(target) {
+            const totalPages = Math.ceil(allSymbolFuncs.length / SYM_PAGE_SIZE) || 1;
+            if (target === 'last') {
+                symPageCurrent = totalPages;
+            } else {
+                symPageCurrent = parseInt(target, 10) || 1;
+            }
+            renderSymbolPage(false);
+            const list = document.getElementById('funcList');
+            if (list) list.scrollTop = 0;
         }
 
         function hookFunction(offset, name) {
@@ -1677,12 +1773,15 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         }
 
         function inspectPackageInSymbols(pkgName) {
-            let term = pkgName.replace(/^package:/, '').split('/')[0].replace(/\.dart$/, '');
+            const parts = (pkgName || '').replace(/^package:/, '').split('/');
+            const lastPart = parts[parts.length - 1].replace(/\.dart$/, '');
+            const term = lastPart || parts[0].replace(/\.dart$/, '');
             const symInput = document.getElementById('symSearch');
             if (symInput) {
                 symInput.value = term;
             }
             switchTab('symbols');
+            searchSymbols(term);
             showToast(`Filtering symbols for ${term}...`);
         }
 

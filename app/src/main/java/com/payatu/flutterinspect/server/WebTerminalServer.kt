@@ -156,7 +156,7 @@ object WebTerminalServer {
                         // 2. Query Symbols / Functions
                         get("/functions") {
                             val query = call.parameters["q"] ?: ""
-                            val limit = call.parameters["limit"]?.toIntOrNull() ?: 50
+                            val limit = call.parameters["limit"]?.toIntOrNull() ?: 1500
                             val functions = if (query.isBlank()) {
                                 SymbolManager.getAllFunctions(limit)
                             } else {

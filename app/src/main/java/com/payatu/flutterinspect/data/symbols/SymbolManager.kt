@@ -312,13 +312,13 @@ object SymbolManager {
         return cls.fields[normOff] ?: cls.fields["0x$normOff"]
     }
 
-    fun getAllFunctions(limit: Int = 500): List<DartSymbolFunction> {
+    fun getAllFunctions(limit: Int = 1500): List<DartSymbolFunction> {
         return synchronized(this) {
             funcByOffset.values.asSequence().take(limit).toList()
         }
     }
 
-    fun searchFunctions(query: String, limit: Int = 100): List<DartSymbolFunction> {
+    fun searchFunctions(query: String, limit: Int = 1500): List<DartSymbolFunction> {
         if (query.isBlank()) return emptyList()
         val q = query.lowercase().trim()
         val qNoUnderscore = q.replace("_", "")
