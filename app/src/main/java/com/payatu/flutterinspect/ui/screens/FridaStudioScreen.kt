@@ -191,6 +191,10 @@ fun FridaStudioScreen(
                 scriptContent = scriptCode,
                 isAttachMode = isAttachMode,
                 onLogLine = { line ->
+                    if (line.contains("ptrace pokedata", ignoreCase = true) || line.contains("I/O error", ignoreCase = true)) {
+                        onHookRunningChange(false)
+                        com.payatu.flutterinspect.server.TraceLogBroadcaster.updateHookState(false, "FRIDA")
+                    }
                     val dec = SymbolManager.decorateLogLine(line)
                     consoleLogs.add(dec)
                     com.payatu.flutterinspect.server.TraceLogBroadcaster.postLog(dec)
@@ -199,7 +203,9 @@ fun FridaStudioScreen(
 
             if (res.isSuccess) {
                 onFridaSessionChange(res.getOrNull())
-                com.payatu.flutterinspect.server.TraceLogBroadcaster.postLog("[✓] Frida interceptor active for $targetProcess")
+                if (!isAttachMode) {
+                    com.payatu.flutterinspect.server.TraceLogBroadcaster.postLog("[✓] Frida interceptor active for $targetProcess")
+                }
             } else {
                 onHookRunningChange(false)
                 com.payatu.flutterinspect.server.TraceLogBroadcaster.updateHookState(false, "FRIDA")
@@ -1203,7 +1209,7 @@ fun FridaStudioScreen(
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "SPAWN (COLD)",
+                                    text = "SPAWN (RECOMMENDED)",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
@@ -1250,6 +1256,19 @@ fun FridaStudioScreen(
                             }
                         }
                     }
+
+                    Text(
+                        text = if (isAttachMode) {
+                            "⚠️ Live Attach may encounter Android ptrace restrictions on running apps. Switch to Spawn if attach fails."
+                        } else {
+                            "💡 Recommended: Spawn mode hooks during process start before ART locks shared memory."
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.5.sp,
+                            color = if (isAttachMode) AmberWarning else TextMuted
+                        ),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
 
                     Button(
                         onClick = { startFrida() },

@@ -587,9 +587,9 @@
 
         .snap-pkg-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-            gap: 8px;
-            max-height: 520px;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 10px;
+            max-height: 560px;
             overflow-y: auto;
             padding-right: 4px;
         }
@@ -598,11 +598,11 @@
             background: var(--bg-surface-var);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 9px 12px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
-            gap: 8px;
+            gap: 10px;
             transition: all 0.2s;
         }
 
@@ -613,12 +613,53 @@
 
         .snap-pkg-name {
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 11px;
+            font-size: 11.5px;
+            line-height: 1.45;
             color: var(--text-primary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            word-break: break-all;
+            white-space: normal;
             flex: 1;
+        }
+
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 4px 4px 4px;
+            border-top: 1px solid var(--border);
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pagination-btn {
+            background: var(--bg-surface-var);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: rgba(0, 229, 255, 0.12);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -791,6 +832,18 @@
                     <div id="snapPackagesList" class="snap-pkg-container">
                         <div style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">
                             Select an app or click "Refresh Snapshot" to view discovered packages.
+                        </div>
+                    </div>
+
+                    <!-- Snapshot Packages Pagination Bar -->
+                    <div class="pagination-bar" id="snapPaginationBar" style="display: none;">
+                        <span id="snapPageInfo" style="font-family: ui-monospace, monospace; font-size: 11.5px;">Showing 1-100 of 645</span>
+                        <div class="pagination-controls">
+                            <button class="pagination-btn" id="snapPageFirst" onclick="goToSnapPage(1)">« First</button>
+                            <button class="pagination-btn" id="snapPagePrev" onclick="changeSnapPage(-1)">‹ Prev</button>
+                            <span id="snapPageCurrent" style="padding: 0 8px; font-weight: 700; color: var(--cyan); font-family: ui-monospace, monospace; font-size: 11.5px;">Page 1 / 7</span>
+                            <button class="pagination-btn" id="snapPageNext" onclick="changeSnapPage(1)">Next ›</button>
+                            <button class="pagination-btn" id="snapPageLast" onclick="goToSnapPage('last')">Last »</button>
                         </div>
                     </div>
                 </div>
@@ -1022,14 +1075,31 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             return res;
         }
 
+        const MAX_LOGS_MEMORY = 3000;
+        const MAX_DOM_LINES = 800;
+        let pendingLogQueue = [];
+        let logRenderFrameId = null;
+        let isUserScrolledUp = false;
+
         function renderTerminal() {
             const terminal = document.getElementById('terminal');
+            if (!terminal) return;
+
+            if (logRenderFrameId) {
+                cancelAnimationFrame(logRenderFrameId);
+                logRenderFrameId = null;
+            }
+            pendingLogQueue = [];
+
             const filtered = getFilteredLogs();
-            
-            terminal.innerHTML = filtered.map(formatLine).join('');
+            const displayLogs = filtered.length > MAX_DOM_LINES 
+                ? filtered.slice(filtered.length - MAX_DOM_LINES) 
+                : filtered;
+
+            terminal.innerHTML = displayLogs.map(formatLine).join('');
             document.getElementById('logCount').textContent = `${filtered.length} lines`;
 
-            if (autoScroll) {
+            if (autoScroll && !isUserScrolledUp) {
                 terminal.scrollTop = terminal.scrollHeight;
             }
         }
@@ -1037,13 +1107,62 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         function addLog(line) {
             if (line === '__CLEAR_LOGS__') {
                 logs = [];
+                pendingLogQueue = [];
+                if (logRenderFrameId) {
+                    cancelAnimationFrame(logRenderFrameId);
+                    logRenderFrameId = null;
+                }
                 renderTerminal();
                 return;
             }
-            logs.push(line);
-            if (logs.length > 2500) logs.shift();
 
-            renderTerminal();
+            logs.push(line);
+            if (logs.length > MAX_LOGS_MEMORY) logs.shift();
+
+            pendingLogQueue.push(line);
+
+            if (!logRenderFrameId) {
+                logRenderFrameId = requestAnimationFrame(flushPendingLogs);
+            }
+        }
+
+        function flushPendingLogs() {
+            logRenderFrameId = null;
+            if (!pendingLogQueue.length) return;
+
+            const terminal = document.getElementById('terminal');
+            if (!terminal) {
+                pendingLogQueue = [];
+                return;
+            }
+
+            if (filterText || isClean) {
+                pendingLogQueue = [];
+                renderTerminal();
+                return;
+            }
+
+            const batch = pendingLogQueue;
+            pendingLogQueue = [];
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = batch.map(formatLine).join('');
+
+            const fragment = document.createDocumentFragment();
+            while (tempDiv.firstChild) {
+                fragment.appendChild(tempDiv.firstChild);
+            }
+            terminal.appendChild(fragment);
+
+            while (terminal.childElementCount > MAX_DOM_LINES) {
+                terminal.removeChild(terminal.firstElementChild);
+            }
+
+            document.getElementById('logCount').textContent = `${logs.length} lines`;
+
+            if (autoScroll && !isUserScrolledUp) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
         }
 
         function toggleClean() {
@@ -1057,7 +1176,13 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
         function toggleAutoScroll() {
             autoScroll = !autoScroll;
-            document.getElementById('scrollBtn').classList.toggle('active', autoScroll);
+            isUserScrolledUp = !autoScroll;
+            const btn = document.getElementById('scrollBtn');
+            btn.classList.toggle('active', autoScroll);
+            if (autoScroll) {
+                const terminal = document.getElementById('terminal');
+                if (terminal) terminal.scrollTop = terminal.scrollHeight;
+            }
         }
 
         function applyFilter() {
@@ -1067,6 +1192,11 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
         function clearTerminal() {
             logs = [];
+            pendingLogQueue = [];
+            if (logRenderFrameId) {
+                cancelAnimationFrame(logRenderFrameId);
+                logRenderFrameId = null;
+            }
             renderTerminal();
             fetch('/api/clear-console', { method: 'POST' }).catch(() => {});
         }
@@ -1450,48 +1580,86 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             renderSnapshotPackages(allSnapshotPackages);
         }
 
-        function renderSnapshotPackages(list) {
+        let snapPageCurrent = 1;
+        const SNAP_PAGE_SIZE = 100;
+        let activeSnapList = [];
+
+        function renderSnapshotPackages(list, resetPage = true) {
             const container = document.getElementById('snapPackagesList');
+            const paginationBar = document.getElementById('snapPaginationBar');
             if (!container) return;
 
-            if (!list || !list.length) {
+            activeSnapList = list || [];
+            if (resetPage) snapPageCurrent = 1;
+
+            if (!activeSnapList.length) {
                 container.innerHTML = '<div style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">No matching snapshot packages found.</div>';
+                if (paginationBar) paginationBar.style.display = 'none';
                 return;
             }
 
-            const maxDisplay = 250;
-            const displayList = list.slice(0, maxDisplay);
-            const truncatedNote = list.length > maxDisplay 
-                ? `<div style="grid-column: 1 / -1; padding: 8px 12px; background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px; font-size: 11px; color: var(--cyan); text-align: center;">
-                     Showing first ${maxDisplay} of ${list.length.toLocaleString()} packages. Use the search box above to filter libraries.
-                   </div>`
-                : '';
+            const totalPages = Math.ceil(activeSnapList.length / SNAP_PAGE_SIZE) || 1;
+            if (snapPageCurrent < 1) snapPageCurrent = 1;
+            if (snapPageCurrent > totalPages) snapPageCurrent = totalPages;
 
-            container.innerHTML = displayList.map(pkg => `
+            const startIndex = (snapPageCurrent - 1) * SNAP_PAGE_SIZE;
+            const endIndex = Math.min(startIndex + SNAP_PAGE_SIZE, activeSnapList.length);
+            const pageItems = activeSnapList.slice(startIndex, endIndex);
+
+            container.innerHTML = pageItems.map(pkg => `
                 <div class="snap-pkg-card">
                     <span class="snap-pkg-name" title="${escapeHtml(pkg)}">${escapeHtml(pkg)}</span>
-                    <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+                    <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-top: 2px;">
                         <button class="btn" style="padding: 2px 6px; font-size: 10px;" onclick="copyPackageName('${escapeHtml(pkg)}')" title="Copy Package URI">📋</button>
                         <button class="btn btn-purple" style="padding: 2px 8px; font-size: 10px;" onclick="inspectPackageInSymbols('${escapeHtml(pkg)}')" title="Filter functions by this package">🔍 Symbols</button>
                     </div>
                 </div>
-            `).join('') + truncatedNote;
+            `).join('');
+
+            if (paginationBar) {
+                paginationBar.style.display = 'flex';
+                document.getElementById('snapPageInfo').textContent = `Showing ${(startIndex + 1).toLocaleString()} - ${endIndex.toLocaleString()} of ${activeSnapList.length.toLocaleString()} packages`;
+                document.getElementById('snapPageCurrent').textContent = `Page ${snapPageCurrent} / ${totalPages}`;
+                document.getElementById('snapPageFirst').disabled = (snapPageCurrent === 1);
+                document.getElementById('snapPagePrev').disabled = (snapPageCurrent === 1);
+                document.getElementById('snapPageNext').disabled = (snapPageCurrent === totalPages);
+                document.getElementById('snapPageLast').disabled = (snapPageCurrent === totalPages);
+            }
+        }
+
+        function changeSnapPage(delta) {
+            snapPageCurrent += delta;
+            renderSnapshotPackages(activeSnapList, false);
+            const container = document.getElementById('snapPackagesList');
+            if (container) container.scrollTop = 0;
+        }
+
+        function goToSnapPage(target) {
+            const totalPages = Math.ceil(activeSnapList.length / SNAP_PAGE_SIZE) || 1;
+            if (target === 'last') {
+                snapPageCurrent = totalPages;
+            } else {
+                snapPageCurrent = parseInt(target, 10) || 1;
+            }
+            renderSnapshotPackages(activeSnapList, false);
+            const container = document.getElementById('snapPackagesList');
+            if (container) container.scrollTop = 0;
         }
 
         function filterSnapshotPackages() {
             const query = (document.getElementById('snapPkgFilter') ? document.getElementById('snapPkgFilter').value : '').toLowerCase().trim();
             if (!query) {
-                renderSnapshotPackages(allSnapshotPackages);
+                renderSnapshotPackages(allSnapshotPackages, true);
                 return;
             }
             const filtered = allSnapshotPackages.filter(p => p.toLowerCase().includes(query));
-            renderSnapshotPackages(filtered);
+            renderSnapshotPackages(filtered, true);
         }
 
         function clearPkgFilter() {
             const input = document.getElementById('snapPkgFilter');
             if (input) input.value = '';
-            renderSnapshotPackages(allSnapshotPackages);
+            renderSnapshotPackages(allSnapshotPackages, true);
         }
 
         function copySdkHash() {
@@ -1532,6 +1700,28 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             fetchStatus();
             loadAppsList();
             setInterval(fetchStatus, 5000);
+
+            const terminalEl = document.getElementById('terminal');
+            if (terminalEl) {
+                terminalEl.addEventListener('scroll', () => {
+                    const distanceToBottom = terminalEl.scrollHeight - terminalEl.scrollTop - terminalEl.clientHeight;
+                    if (distanceToBottom > 45) {
+                        if (!isUserScrolledUp) {
+                            isUserScrolledUp = true;
+                            autoScroll = false;
+                            const btn = document.getElementById('scrollBtn');
+                            if (btn) btn.classList.remove('active');
+                        }
+                    } else {
+                        if (isUserScrolledUp) {
+                            isUserScrolledUp = false;
+                            autoScroll = true;
+                            const btn = document.getElementById('scrollBtn');
+                            if (btn) btn.classList.add('active');
+                        }
+                    }
+                });
+            }
         });
     </script>
 </body>

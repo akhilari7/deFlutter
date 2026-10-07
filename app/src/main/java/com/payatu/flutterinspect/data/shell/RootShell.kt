@@ -306,6 +306,12 @@ object RootShell {
                     val reader = process.inputStream.bufferedReader()
                     while (process.isAlive) {
                         val raw = reader.readLine() ?: break
+                        if (raw.contains("ptrace pokedata", ignoreCase = true) || raw.contains("I/O error", ignoreCase = true)) {
+                            onLogLine("[-] $raw")
+                            onLogLine("[!] Android kernel blocked live ptrace write (EIO due to shared ART zygote memfd).")
+                            onLogLine("[💡] Fix: Switch mode to 'SPAWN (RECOMMENDED)' to trace $packageName reliably from app startup!")
+                            continue
+                        }
                         // Clean frida JSON messages if formatted as {"type":"send","payload":...}
                         val cleaned = try {
                             if (raw.trimStart().startsWith("{\"type\":")) {
