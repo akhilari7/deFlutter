@@ -5,7 +5,7 @@
 <h1 align="center">deFlutter</h1>
 
 <p align="center">
-  <strong>The Dual-Engine Dart AOT Runtime Dissector & Dynamic Tracer for Android</strong>
+  <strong>The Dual-Engine Dart AOT Runtime Inspector & Dynamic Tracer for Android</strong>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ Flutter Ahead-of-Time (AOT) compiles Dart applications into raw, stripped ARM64 
 
 **deFlutter** is a Flutter reverse-engineering tool that bridges static Dart AOT analysis with dynamic runtime analysis.
 
-Building on the groundwork laid by [Blutter](https://github.com/worawit/blutter), which made Dart AOT decompilation and symbol reconstruction possible, **deFlutter** takes Blutter's static analysis output into the live runtime—enabling Dart function analysis, deep tracing, and experimental runtime tampering.
+Building on the groundwork laid by [Blutter](https://github.com/worawit/blutter), which made Dart AOT decompilation and symbol reconstruction possible, **deFlutter** takes Blutter's static analysis output into the live runtime-enabling Dart function analysis, deep tracing, and experimental runtime tampering.
 
 The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/reFlutter), one of the early tools that helped shape Flutter reverse engineering and is still relevant.
 
@@ -62,7 +62,7 @@ The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/
 ## 🚀 Key Features
 
 * ⚡ **Dual Hooking Engines**:
-  * **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device—**no Magisk module or reboot required!**
+  * **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device, **no Magisk module or reboot required!**
   * **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via the **deFlutter Zygisk module** (Magisk, KernelSU, or APatch) with Capstone disassembly, LR detours, live ASLR discovery, and live `.rodata` memory scanning (optional).
 * 🐳 **Automated Blutter Pipeline & Symbol Integration**: Pull target libraries (`libapp.so` & `libflutter.so`) via ADB, decompile with Blutter inside an isolated Docker container, extract semantic symbols (`symbols.json`), and automatically rebase and synchronize them with the deFlutter app and web companion.
 * 📦 **Dart VM Snapshot Introspection**: Parses the runtime Dart AOT snapshot directly from memory without symbols—recovering SDK hashes, VM compiler flags, heap clusters, and thousands of discovered package/library URIs.
