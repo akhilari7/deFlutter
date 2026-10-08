@@ -93,6 +93,16 @@ fun FridaStudioScreen(
     var fridaTraceReturn by remember { mutableStateOf(true) }
 
     // Bi-directional state sync with Web Terminal and global broadcaster
+    val globalBasicTraceOnly by com.payatu.flutterinspect.server.TraceLogBroadcaster.isBasicTraceOnly.collectAsState()
+    LaunchedEffect(globalBasicTraceOnly) {
+        if (dobbyBasicTraceOnly != globalBasicTraceOnly) {
+            dobbyBasicTraceOnly = globalBasicTraceOnly
+        }
+        if (fridaBasicTraceOnly != globalBasicTraceOnly) {
+            fridaBasicTraceOnly = globalBasicTraceOnly
+        }
+    }
+
     LaunchedEffect(globalHookRunning, globalEngine) {
         if (globalHookRunning && globalEngine == "DOBBY") {
             isDobbyRunning = true
@@ -121,6 +131,12 @@ fun FridaStudioScreen(
         com.payatu.flutterinspect.server.TraceLogBroadcaster.logsFlow.collect { line ->
             if (line == "__CLEAR_LOGS__") {
                 consoleLogs.clear()
+            } else if (line == "__SET_BASIC_ONLY:true__") {
+                dobbyBasicTraceOnly = true
+                fridaBasicTraceOnly = true
+            } else if (line == "__SET_BASIC_ONLY:false__") {
+                dobbyBasicTraceOnly = false
+                fridaBasicTraceOnly = false
             } else if (!consoleLogs.contains(line)) {
                 consoleLogs.add(line)
             }
@@ -171,8 +187,29 @@ fun FridaStudioScreen(
                 return@launch
             }
 
+            // 1. Clear previous session/hooks across Dobby and Frida
+            if (dobbySession != null || isDobbyRunning) {
+                dobbySession?.stop()
+                dobbySession = null
+                isDobbyRunning = false
+                RootShell.clearDobbyHooks(targetProcess)
+            }
+            fridaSession?.stop()
+            onFridaSessionChange(null)
+
             consoleLogs.clear()
             com.payatu.flutterinspect.server.TraceLogBroadcaster.clear()
+            com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(fridaBasicTraceOnly)
+            val fridaHookConfigs = effectiveBatchFuncs.mapNotNull { f ->
+                val off = f.offset.removePrefix("0x").toLongOrNull(16) ?: f.offset.toLongOrNull()
+                if (off != null) com.payatu.flutterinspect.data.models.HookTargetConfig(
+                    offset = off,
+                    name = f.name,
+                    traceReturn = fridaTraceReturn
+                ) else null
+            }
+            com.payatu.flutterinspect.server.TraceLogBroadcaster.updateActiveHooks(fridaHookConfigs)
+
             consoleLogs.add("[*] Initializing Frida in-app interceptor...")
             consoleLogs.add("[*] Target App: $targetProcess")
             consoleLogs.add("[*] Mode: ${if (isAttachMode) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
@@ -228,6 +265,7 @@ fun FridaStudioScreen(
         onFridaSessionChange(null)
         onHookRunningChange(false)
         com.payatu.flutterinspect.server.TraceLogBroadcaster.updateHookState(false, "FRIDA")
+        com.payatu.flutterinspect.server.TraceLogBroadcaster.updateActiveHooks(emptyList())
         val msg = "[*] Interceptor detached & stopped."
         consoleLogs.add(msg)
         com.payatu.flutterinspect.server.TraceLogBroadcaster.postLog(msg)
@@ -240,8 +278,18 @@ fun FridaStudioScreen(
                 return@launch
             }
 
+            // 1. Clear previous session/hooks across Frida and Dobby
+            if (fridaSession != null) {
+                fridaSession?.stop()
+                onFridaSessionChange(null)
+            }
+            dobbySession?.stop()
+            dobbySession = null
+            RootShell.clearDobbyHooks(targetProcess)
+
             consoleLogs.clear()
             com.payatu.flutterinspect.server.TraceLogBroadcaster.clear()
+            com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(dobbyBasicTraceOnly)
             val msg1 = "[★] Initializing Dobby Native Inline Tracer..."
             val msg2 = "[*] Target App: $targetProcess"
             consoleLogs.add(msg1)
@@ -636,7 +684,11 @@ fun FridaStudioScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(SlateSurfaceVariant)
-                                    .clickable { dobbyBasicTraceOnly = !dobbyBasicTraceOnly }
+                                    .clickable {
+                                        val newVal = !dobbyBasicTraceOnly
+                                        dobbyBasicTraceOnly = newVal
+                                        com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(newVal)
+                                    }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -655,7 +707,10 @@ fun FridaStudioScreen(
                                 }
                                 Switch(
                                     checked = dobbyBasicTraceOnly,
-                                    onCheckedChange = { dobbyBasicTraceOnly = it },
+                                    onCheckedChange = {
+                                        dobbyBasicTraceOnly = it
+                                        com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(it)
+                                    },
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = PurpleHighlight,
                                         checkedTrackColor = PurpleHighlight.copy(alpha = 0.3f)
@@ -813,7 +868,11 @@ fun FridaStudioScreen(
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(SlateSurfaceVariant)
-                                        .clickable { fridaBasicTraceOnly = !fridaBasicTraceOnly }
+                                        .clickable {
+                                            val newVal = !fridaBasicTraceOnly
+                                            fridaBasicTraceOnly = newVal
+                                            com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(newVal)
+                                        }
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
@@ -832,7 +891,10 @@ fun FridaStudioScreen(
                                     }
                                     Switch(
                                         checked = fridaBasicTraceOnly,
-                                        onCheckedChange = { fridaBasicTraceOnly = it },
+                                        onCheckedChange = {
+                                            fridaBasicTraceOnly = it
+                                            com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(it)
+                                        },
                                         colors = SwitchDefaults.colors(
                                             checkedThumbColor = CyanPrimary,
                                             checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
@@ -916,10 +978,11 @@ fun FridaStudioScreen(
                 }
         } else {
             // LIVE CONSOLE TAB
-            val filteredLogs = remember(consoleLogs.size, isVerbose, dobbyBasicTraceOnly, selectedEngine) {
+            val filteredLogs = remember(consoleLogs.size, isVerbose, dobbyBasicTraceOnly, fridaBasicTraceOnly, selectedEngine) {
                 val list = mutableListOf<String>()
+                val basicOnly = if (selectedEngine == TracerEngine.DOBBY) dobbyBasicTraceOnly else fridaBasicTraceOnly
                 for (rawLine in consoleLogs) {
-                    if (selectedEngine == TracerEngine.DOBBY && dobbyBasicTraceOnly) {
+                    if (basicOnly) {
                         val trimmed = rawLine.trimStart()
                         if (trimmed.startsWith("├──") || trimmed.startsWith("└──") || trimmed.startsWith("│") ||
                             trimmed.contains("(no active arguments or frame data detected)")) {
@@ -1028,24 +1091,28 @@ fun FridaStudioScreen(
                             modifier = Modifier.height(28.dp)
                         )
 
-                        if (selectedEngine == TracerEngine.DOBBY) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            FilterChip(
-                                selected = dobbyBasicTraceOnly,
-                                onClick = { dobbyBasicTraceOnly = !dobbyBasicTraceOnly },
-                                label = { Text(if (dobbyBasicTraceOnly) "Calls Only" else "Args", fontSize = 10.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PurpleHighlight.copy(alpha = 0.2f),
-                                    selectedLabelColor = PurpleHighlight
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = dobbyBasicTraceOnly,
-                                    borderColor = if (dobbyBasicTraceOnly) PurpleHighlight else SlateBorder
-                                ),
-                                modifier = Modifier.height(28.dp)
-                            )
-                        }
+                        val currentBasicOnly = if (selectedEngine == TracerEngine.DOBBY) dobbyBasicTraceOnly else fridaBasicTraceOnly
+                        Spacer(modifier = Modifier.width(4.dp))
+                        FilterChip(
+                            selected = currentBasicOnly,
+                            onClick = {
+                                val newVal = !currentBasicOnly
+                                dobbyBasicTraceOnly = newVal
+                                fridaBasicTraceOnly = newVal
+                                com.payatu.flutterinspect.server.TraceLogBroadcaster.updateBasicTraceOnly(newVal)
+                            },
+                            label = { Text(if (currentBasicOnly) "Calls Only" else "Args", fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = if (selectedEngine == TracerEngine.DOBBY) PurpleHighlight.copy(alpha = 0.2f) else CyanPrimary.copy(alpha = 0.2f),
+                                selectedLabelColor = if (selectedEngine == TracerEngine.DOBBY) PurpleHighlight else CyanPrimary
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = currentBasicOnly,
+                                borderColor = if (currentBasicOnly) (if (selectedEngine == TracerEngine.DOBBY) PurpleHighlight else CyanPrimary) else SlateBorder
+                            ),
+                            modifier = Modifier.height(28.dp)
+                        )
 
                         Spacer(modifier = Modifier.width(4.dp))
 

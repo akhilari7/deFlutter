@@ -141,6 +141,7 @@ object WebTerminalServer {
                             root.put("symbolStats", SymbolManager.symbolStats.value ?: "Not loaded")
                             root.put("port", PORT)
                             root.put("connectedClients", _connectedClients.value)
+                            root.put("basicOnly", TraceLogBroadcaster.isBasicTraceOnly.value)
 
                             val hooksArr = JSONArray()
                             TraceLogBroadcaster.activeHooks.value.forEach { h ->
@@ -301,14 +302,180 @@ object WebTerminalServer {
                                     RootShell.clearDobbyHooks(targetProc)
                                     TraceLogBroadcaster.postLog("[*] Hooks cleared and detached via Web Terminal API.")
                                     call.respondText(JSONObject().put("success", true).put("message", "Hooks cleared").toString(), ContentType.Application.Json)
+                                } else if (action == "batch") {
+                                    if (targetProc.isBlank()) {
+                                        call.respondText(
+                                            JSONObject().put("success", false).put("error", "No active target application set").toString(),
+                                            ContentType.Application.Json,
+                                            HttpStatusCode.BadRequest
+                                        )
+                                        return@post
+                                    }
+
+                                    val itemsArr = json.optJSONArray("items") ?: JSONArray()
+                                    if (itemsArr.length() == 0) {
+                                        call.respondText(
+                                            JSONObject().put("success", false).put("error", "No functions provided in batch").toString(),
+                                            ContentType.Application.Json,
+                                            HttpStatusCode.BadRequest
+                                        )
+                                        return@post
+                                    }
+
+                                    val basicOnly = json.optBoolean("basicOnly", false)
+
+                                    // 1. Clear previous hooks across both engines and reset console
+                                    activeFridaSession?.stop()
+                                    activeFridaSession = null
+                                    RootShell.clearDobbyHooks(targetProc)
+                                    TraceLogBroadcaster.clear()
+                                    TraceLogBroadcaster.updateBasicTraceOnly(basicOnly)
+
+                                    val countToHook = itemsArr.length().coerceAtMost(20)
+
+                                    if (engineMode.startsWith("frida")) {
+                                        val isAttach = (engineMode == "frida_attach" || json.optBoolean("attach", false))
+                                        val funcEntries = mutableListOf<com.payatu.flutterinspect.data.models.FunctionEntry>()
+                                        for (i in 0 until countToHook) {
+                                            val item = itemsArr.optJSONObject(i) ?: continue
+                                            val rawOff = item.optString("offset", "")
+                                            val name = item.optString("name", "func")
+                                            if (rawOff.isNotBlank()) {
+                                                funcEntries.add(com.payatu.flutterinspect.data.models.FunctionEntry(offset = rawOff, name = name))
+                                            }
+                                        }
+
+                                        if (funcEntries.isEmpty()) {
+                                            call.respondText(
+                                                JSONObject().put("success", false).put("error", "No valid functions in batch").toString(),
+                                                ContentType.Application.Json,
+                                                HttpStatusCode.BadRequest
+                                            )
+                                            return@post
+                                        }
+
+                                        val template = if (basicOnly) {
+                                            com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.TemplateType.BASIC_TRACE
+                                        } else {
+                                            com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.TemplateType.MULTI_FUNCTION_BATCH
+                                        }
+
+                                        val script = com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.generateSnippet(
+                                            templateType = com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.TemplateType.MULTI_FUNCTION_BATCH,
+                                            targetLib = "libapp.so",
+                                            targetFunc = null,
+                                            allFuncs = funcEntries,
+                                            isVerbose = false,
+                                            traceReturn = true
+                                        )
+
+                                        val hookConfigs = funcEntries.mapNotNull { f ->
+                                            val off = f.offset.removePrefix("0x").toLongOrNull(16) ?: f.offset.toLongOrNull()
+                                            if (off != null) HookTargetConfig(offset = off, name = f.name, traceReturn = true) else null
+                                        }
+                                        TraceLogBroadcaster.updateActiveHooks(hookConfigs)
+                                        TraceLogBroadcaster.updateHookState(true, "FRIDA")
+                                        TraceLogBroadcaster.postLog("[★] Initializing Frida Batch Interceptor (${funcEntries.size} functions)...")
+                                        TraceLogBroadcaster.postLog("[*] Mode: ${if (isAttach) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
+                                        TraceLogBroadcaster.postLog("[*] Tracing: ${if (basicOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}")
+
+                                        val fridaRes = RootShell.startFridaInterceptor(
+                                            packageName = targetProc,
+                                            scriptContent = script,
+                                            isAttachMode = isAttach,
+                                            onLogLine = { line ->
+                                                TraceLogBroadcaster.postLog(line)
+                                            }
+                                        )
+
+                                        if (fridaRes.isSuccess) {
+                                            activeFridaSession = fridaRes.getOrNull()
+                                            TraceLogBroadcaster.postLog("[✓] Frida batch interceptor active for ${funcEntries.size} functions")
+                                            val resp = JSONObject()
+                                                .put("success", true)
+                                                .put("count", funcEntries.size)
+                                                .put("message", "Frida batch hook active for ${funcEntries.size} functions")
+                                            call.respondText(resp.toString(), ContentType.Application.Json)
+                                        } else {
+                                            TraceLogBroadcaster.updateHookState(false, "FRIDA")
+                                            val errMsg = "[-] Frida batch failed: ${fridaRes.exceptionOrNull()?.message}"
+                                            TraceLogBroadcaster.postLog(errMsg)
+                                            call.respondText(JSONObject().put("success", false).put("error", errMsg).toString(), ContentType.Application.Json)
+                                        }
+                                    } else {
+                                        // DOBBY BATCH
+                                        val hooks = mutableListOf<HookTargetConfig>()
+                                        for (i in 0 until countToHook) {
+                                            val item = itemsArr.optJSONObject(i) ?: continue
+                                            val rawOff = item.optString("offset", "")
+                                            val name = item.optString("name", "func")
+                                            val off = rawOff.removePrefix("0x").toLongOrNull(16) ?: rawOff.toLongOrNull()
+                                            if (off != null) {
+                                                val symFunc = SymbolManager.findFunction(rawOff)
+                                                val paramNames = symFunc?.params?.map { it.name } ?: emptyList()
+                                                hooks.add(
+                                                    HookTargetConfig(
+                                                        offset = off,
+                                                        name = name,
+                                                        traceReturn = true,
+                                                        params = paramNames
+                                                    )
+                                                )
+                                            }
+                                        }
+
+                                        if (hooks.isEmpty()) {
+                                            call.respondText(
+                                                JSONObject().put("success", false).put("error", "No valid function offsets in batch").toString(),
+                                                ContentType.Application.Json,
+                                                HttpStatusCode.BadRequest
+                                            )
+                                            return@post
+                                        }
+
+                                        TraceLogBroadcaster.updateActiveHooks(hooks)
+                                        TraceLogBroadcaster.updateHookState(true, "DOBBY")
+                                        TraceLogBroadcaster.postLog("[★] Initializing Dobby Batch Inline Tracer (${hooks.size} functions)...")
+                                        TraceLogBroadcaster.postLog("[*] Tracing: ${if (basicOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}")
+
+                                        val dispatchRes = RootShell.startDobbyTracer(
+                                            packageName = targetProc,
+                                            hooks = hooks,
+                                            onLogLine = { line ->
+                                                TraceLogBroadcaster.postLog(line)
+                                            }
+                                        )
+
+                                        if (dispatchRes.isSuccess) {
+                                            TraceLogBroadcaster.postLog("[✓] Dispatched Dobby batch hooks for ${hooks.size} functions")
+                                            val resp = JSONObject()
+                                                .put("success", true)
+                                                .put("count", hooks.size)
+                                                .put("message", "Dispatched Dobby batch hooks for ${hooks.size} functions")
+                                            call.respondText(resp.toString(), ContentType.Application.Json)
+                                        } else {
+                                            TraceLogBroadcaster.updateHookState(false, "DOBBY")
+                                            val errMsg = "[-] Failed to dispatch Dobby batch hooks: ${dispatchRes.exceptionOrNull()?.message}"
+                                            TraceLogBroadcaster.postLog(errMsg)
+                                            call.respondText(JSONObject().put("success", false).put("error", errMsg).toString(), ContentType.Application.Json)
+                                        }
+                                    }
                                 } else {
                                     val rawOff = json.optString("offset", "")
                                     val name = json.optString("name", "Target")
                                     val off = rawOff.removePrefix("0x").toLongOrNull(16) ?: rawOff.toLongOrNull()
+                                    val clearPrevious = json.optBoolean("clearPrevious", false)
 
                                     if (off != null) {
                                         val symFunc = SymbolManager.findFunction(rawOff)
                                         val paramNames = symFunc?.params?.map { it.name } ?: emptyList()
+
+                                        if (clearPrevious) {
+                                            activeFridaSession?.stop()
+                                            activeFridaSession = null
+                                            RootShell.clearDobbyHooks(targetProc)
+                                            TraceLogBroadcaster.clear()
+                                        }
 
                                         if (engineMode.startsWith("frida")) {
                                             // FRIDA HOOKING (SPAWN or ATTACH)
@@ -344,6 +511,15 @@ object WebTerminalServer {
                                             activeFridaSession?.stop()
                                             activeFridaSession = null
 
+                                            val singleHook = HookTargetConfig(
+                                                offset = off,
+                                                name = name,
+                                                traceReturn = traceReturn,
+                                                params = paramNames
+                                            )
+                                            TraceLogBroadcaster.updateActiveHooks(listOf(singleHook))
+                                            TraceLogBroadcaster.updateBasicTraceOnly(basicOnly)
+
                                             TraceLogBroadcaster.postLog("[*] Initializing Frida Web Dispatch ($name @ $rawOff)...")
                                             TraceLogBroadcaster.postLog("[*] Mode: ${if (isAttach) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
                                             TraceLogBroadcaster.updateHookState(true, "FRIDA")
@@ -377,8 +553,11 @@ object WebTerminalServer {
                                                 params = paramNames
                                             )
 
-                                            val currentList = TraceLogBroadcaster.activeHooks.value.filter { it.offset != off }.toMutableList()
-                                            currentList.add(newHook)
+                                            val currentList = if (clearPrevious) {
+                                                mutableListOf(newHook)
+                                            } else {
+                                                TraceLogBroadcaster.activeHooks.value.filter { it.offset != off }.toMutableList().apply { add(newHook) }
+                                            }
 
                                             TraceLogBroadcaster.updateActiveHooks(currentList)
                                             TraceLogBroadcaster.updateHookState(true, "DOBBY")
@@ -393,14 +572,27 @@ object WebTerminalServer {
 
                                             TraceLogBroadcaster.postLog("[✓] Dispatched Dobby hook for $name ($rawOff) via Web Terminal")
                                             val resp = JSONObject()
-                                            resp.put("success", dispatchRes.isSuccess)
-                                            resp.put("message", if (dispatchRes.isSuccess) "Hooked $name ($rawOff) with Dobby" else "Failed to dispatch hook")
+                                                resp.put("success", dispatchRes.isSuccess)
+                                                resp.put("message", if (dispatchRes.isSuccess) "Hooked $name ($rawOff) with Dobby" else "Failed to dispatch hook")
                                             call.respondText(resp.toString(), ContentType.Application.Json)
                                         }
                                     } else {
                                         call.respondText(JSONObject().put("success", false).put("error", "Invalid offset").toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
                                     }
                                 }
+                            } catch (e: Exception) {
+                                call.respondText(JSONObject().put("success", false).put("error", e.message).toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
+                            }
+                        }
+
+                        // 3b. Set Basic Trace Mode (Calls Only vs Arg Inspector)
+                        post("/set-basic-trace") {
+                            val body = call.receiveText()
+                            try {
+                                val json = JSONObject(body)
+                                val basicOnly = json.optBoolean("basicOnly", false)
+                                TraceLogBroadcaster.updateBasicTraceOnly(basicOnly)
+                                call.respondText(JSONObject().put("success", true).put("basicOnly", basicOnly).toString(), ContentType.Application.Json)
                             } catch (e: Exception) {
                                 call.respondText(JSONObject().put("success", false).put("error", e.message).toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
                             }
@@ -673,6 +865,7 @@ object WebTerminalServer {
                             val statusMsg = JSONObject()
                             statusMsg.put("type", "status")
                             statusMsg.put("target", TraceLogBroadcaster.activeTarget.value)
+                            statusMsg.put("basicOnly", TraceLogBroadcaster.isBasicTraceOnly.value)
                             statusMsg.put("functionsCount", SymbolManager.functionsCount)
                             statusMsg.put("classesCount", SymbolManager.classesCount)
                             send(Frame.Text(statusMsg.toString()))

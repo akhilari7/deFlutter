@@ -35,6 +35,9 @@ object TraceLogBroadcaster {
     private val _activeHooks = MutableStateFlow<List<HookTargetConfig>>(emptyList())
     val activeHooks: StateFlow<List<HookTargetConfig>> = _activeHooks.asStateFlow()
 
+    private val _isBasicTraceOnly = MutableStateFlow(false)
+    val isBasicTraceOnly: StateFlow<Boolean> = _isBasicTraceOnly.asStateFlow()
+
     fun updateTarget(target: String) {
         _activeTarget.value = target
     }
@@ -42,6 +45,13 @@ object TraceLogBroadcaster {
     fun updateHookState(running: Boolean, engine: String = _activeEngine.value) {
         _isHookRunning.value = running
         _activeEngine.value = engine
+    }
+
+    fun updateBasicTraceOnly(basicOnly: Boolean) {
+        if (_isBasicTraceOnly.value != basicOnly) {
+            _isBasicTraceOnly.value = basicOnly
+            _logsFlow.tryEmit(if (basicOnly) "__SET_BASIC_ONLY:true__" else "__SET_BASIC_ONLY:false__")
+        }
     }
 
     fun updateActiveHooks(hooks: List<HookTargetConfig>) {

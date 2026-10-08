@@ -22,7 +22,7 @@ object FridaSnippetGenerator {
     fun generateSnippet(
         templateType: TemplateType,
         targetLib: String,
-        targetFunc: FunctionEntry?,
+        targetFunc: FunctionEntry? = null,
         allFuncs: List<FunctionEntry> = emptyList(),
         isVerbose: Boolean = false,
         traceReturn: Boolean = true

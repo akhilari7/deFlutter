@@ -719,6 +719,7 @@
                 <div class="terminal-toolbar">
                     <div class="toolbar-group">
                         <button class="btn active" id="cleanBtn" onclick="toggleClean()">Clean Mode</button>
+                        <button class="btn" id="callsOnlyBtn" onclick="toggleCallsOnly()" title="Toggle Basic Call Tracing (Calls & Returns Only)">Calls Only</button>
                         <button class="btn active" id="scrollBtn" onclick="toggleAutoScroll()">Auto-Scroll</button>
                         <input type="text" class="search-input" id="filterInput" placeholder="Filter console logs..." oninput="applyFilter()">
                     </div>
@@ -796,10 +797,28 @@
         <!-- 3. Symbols Explorer Panel -->
         <div class="tab-pane" id="pane-symbols">
             <div class="card">
-                <div class="symbols-header" style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" class="search-input" id="symSearch" placeholder="Search functions (e.g. decrypt, AES, login)..." style="flex: 1;" oninput="debounceSearch()">
+                <div class="symbols-header" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" class="search-input" id="symSearch" placeholder="Search functions (e.g. decrypt, AES, login)..." style="flex: 1; min-width: 220px;" oninput="debounceSearch()">
                     <button class="btn" id="symClearBtn" onclick="clearSymSearch()" style="padding: 6px 12px; font-size: 11px;">✕ Clear</button>
+                    <button class="btn" id="symBatchToggleBtn" onclick="toggleBatchMode()" style="padding: 6px 12px; font-size: 11px;">⚡ Batch Mode</button>
                     <span id="searchStats" style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">Loading symbols...</span>
+                </div>
+
+                <!-- Symbols Batch Control Bar -->
+                <div id="symBatchBar" style="display: none; background: var(--bg-surface-var); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 8px; padding: 10px 14px; margin-top: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span id="batchCountBadge" class="badge badge-purple" style="font-weight: 700; font-family: monospace;">Selected: 0 / 20</span>
+                        <button class="btn" onclick="selectPageBatch()" title="Select up to 20 functions from this page">Select Page (Top 20)</button>
+                        <button class="btn" onclick="clearBatchSelection()">Clear Selection</button>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--text-primary); user-select: none;">
+                            <input type="checkbox" id="batchBasicOnlyCheck" onchange="toggleCallsOnlyFromBatch(this.checked)" style="accent-color: var(--purple); cursor: pointer;"> Basic Call Tracing (Calls Only)
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-purple" id="batchDobbyBtn" onclick="deployBatchHook('dobby')" title="Hook selected functions natively via Dobby (clears previous hooks)">⚡ Dobby Batch</button>
+                        <button class="btn" id="batchFridaSpawnBtn" style="border-color: var(--cyan); color: var(--cyan);" onclick="deployBatchHook('frida_spawn')" title="Cold start spawn selected functions with Frida">⚡ Frida Spawn</button>
+                        <button class="btn" id="batchFridaAttachBtn" style="border-color: var(--emerald); color: var(--emerald);" onclick="deployBatchHook('frida_attach')" title="Attach to running PID for selected functions with Frida">⚡ Frida Attach</button>
+                    </div>
                 </div>
                 <div class="func-list" id="funcList">
                     <div style="color: var(--text-muted); padding: 20px;">Loading functions...</div>
@@ -1043,12 +1062,15 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         // State
         let logs = [];
         let isClean = true;
+        let isCallsOnly = false;
         let autoScroll = true;
         let filterText = "";
         let ws = null;
         let activeTarget = "";
         let currentSnapshot = null;
         let allSnapshotPackages = [];
+        let isBatchMode = false;
+        const selectedBatchFunctions = new Map(); // key: offset, value: { offset, name }
 
         // Tab Switching
         function switchTab(name) {
@@ -1148,6 +1170,12 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         function getFilteredLogs() {
             const rawFiltered = logs.filter(l => {
                 if (filterText && !l.toLowerCase().includes(filterText.toLowerCase())) return false;
+                if (isCallsOnly) {
+                    const trimmed = l.trimStart();
+                    if (trimmed.startsWith('├──') || trimmed.startsWith('└──') || trimmed.startsWith('│') || trimmed.includes('(no active arguments or frame data detected)')) {
+                        return false;
+                    }
+                }
                 if (isClean && !isValuableLine(l)) return false;
                 return true;
             });
@@ -1207,6 +1235,14 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 renderTerminal();
                 return;
             }
+            if (line === '__SET_BASIC_ONLY:true__') {
+                setCallsOnly(true);
+                return;
+            }
+            if (line === '__SET_BASIC_ONLY:false__') {
+                setCallsOnly(false);
+                return;
+            }
 
             logs.push(line);
             if (logs.length > MAX_LOGS_MEMORY) logs.shift();
@@ -1228,7 +1264,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 return;
             }
 
-            if (filterText || isClean) {
+            if (filterText || isClean || isCallsOnly) {
                 pendingLogQueue = [];
                 renderTerminal();
                 return;
@@ -1255,6 +1291,40 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             if (autoScroll && !isUserScrolledUp) {
                 terminal.scrollTop = terminal.scrollHeight;
             }
+        }
+
+        function setCallsOnly(enabled) {
+            isCallsOnly = Boolean(enabled);
+            const btn = document.getElementById('callsOnlyBtn');
+            if (btn) {
+                btn.classList.toggle('active', isCallsOnly);
+                btn.textContent = isCallsOnly ? "Calls Only: ON" : "Calls Only";
+            }
+            const batchCheck = document.getElementById('batchBasicOnlyCheck');
+            if (batchCheck && batchCheck.checked !== isCallsOnly) {
+                batchCheck.checked = isCallsOnly;
+            }
+            renderTerminal();
+        }
+
+        function toggleCallsOnly() {
+            const targetState = !isCallsOnly;
+            setCallsOnly(targetState);
+            showToast(targetState ? "Calls Only: argument inspection hidden, displaying call hits & returns" : "Calls Only OFF: full argument inspection active");
+            fetch('/api/set-basic-trace', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ basicOnly: targetState })
+            }).catch(() => {});
+        }
+
+        function toggleCallsOnlyFromBatch(checked) {
+            setCallsOnly(checked);
+            fetch('/api/set-basic-trace', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ basicOnly: checked })
+            }).catch(() => {});
         }
 
         function toggleClean() {
@@ -1380,6 +1450,11 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                         knownHookOffsets.set(h.name, h.offset);
                     }
                 });
+            }
+            if (data.basicOnly !== undefined) {
+                if (isCallsOnly !== Boolean(data.basicOnly)) {
+                    setCallsOnly(data.basicOnly);
+                }
             }
         }
 
@@ -1565,6 +1640,117 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 });
         }
 
+        function toggleBatchMode() {
+            isBatchMode = !isBatchMode;
+            const toggleBtn = document.getElementById('symBatchToggleBtn');
+            const batchBar = document.getElementById('symBatchBar');
+            if (toggleBtn) {
+                toggleBtn.classList.toggle('active', isBatchMode);
+                toggleBtn.textContent = isBatchMode ? "✕ Exit Batch" : "⚡ Batch Mode";
+            }
+            if (batchBar) {
+                batchBar.style.display = isBatchMode ? 'flex' : 'none';
+            }
+            updateBatchBar();
+            renderSymbolPage();
+        }
+
+        function updateBatchBar() {
+            const count = selectedBatchFunctions.size;
+            const badge = document.getElementById('batchCountBadge');
+            if (badge) {
+                badge.textContent = `Selected: ${count} / 20`;
+                if (count >= 20) {
+                    badge.className = 'badge badge-rose';
+                } else if (count > 0) {
+                    badge.className = 'badge badge-purple';
+                } else {
+                    badge.className = 'badge';
+                }
+            }
+            const dobbyBtn = document.getElementById('batchDobbyBtn');
+            const spawnBtn = document.getElementById('batchFridaSpawnBtn');
+            const attachBtn = document.getElementById('batchFridaAttachBtn');
+            const disabled = count === 0;
+            if (dobbyBtn) dobbyBtn.disabled = disabled;
+            if (spawnBtn) spawnBtn.disabled = disabled;
+            if (attachBtn) attachBtn.disabled = disabled;
+        }
+
+        function toggleBatchItem(offset, name, checked) {
+            if (checked) {
+                if (selectedBatchFunctions.size >= 20) {
+                    showToast("Maximum 20 functions allowed for batch hooking");
+                    renderSymbolPage();
+                    return;
+                }
+                selectedBatchFunctions.set(offset, { offset, name });
+            } else {
+                selectedBatchFunctions.delete(offset);
+            }
+            updateBatchBar();
+            renderSymbolPage();
+        }
+
+        function selectPageBatch() {
+            if (!currentPagedFuncs || !currentPagedFuncs.length) {
+                showToast("No functions on current page to select");
+                return;
+            }
+            for (const f of currentPagedFuncs) {
+                if (selectedBatchFunctions.size >= 20) break;
+                if (!selectedBatchFunctions.has(f.offset)) {
+                    selectedBatchFunctions.set(f.offset, { offset: f.offset, name: f.name });
+                }
+            }
+            showToast(`Selected ${selectedBatchFunctions.size} / 20 functions`);
+            updateBatchBar();
+            renderSymbolPage();
+        }
+
+        function clearBatchSelection() {
+            selectedBatchFunctions.clear();
+            updateBatchBar();
+            renderSymbolPage();
+            showToast("Cleared batch selection");
+        }
+
+        function deployBatchHook(engine = 'dobby') {
+            if (selectedBatchFunctions.size === 0) {
+                showToast("Please select at least 1 function (up to 20) to hook");
+                return;
+            }
+
+            const items = Array.from(selectedBatchFunctions.values()).slice(0, 20);
+            const basicOnly = isCallsOnly;
+            const engineLabel = engine === 'dobby' ? 'Dobby' : (engine === 'frida_attach' ? 'Frida Attach' : 'Frida Spawn');
+            showToast(`Deploying ${engineLabel} batch hook for ${items.length} function(s)...`);
+
+            fetch('/api/hooks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'batch',
+                    engine: engine,
+                    basicOnly: basicOnly,
+                    items: items
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    showToast(res.message || `Dispatched batch hook for ${items.length} functions!`);
+                    items.forEach(it => knownHookOffsets.set(it.name, it.offset));
+                    switchTab('terminal');
+                } else {
+                    showToast(`Batch hook failed: ${res.error || res.message}`);
+                }
+            })
+            .catch(err => {
+                showToast(`Batch hook error: ${err.message || err}`);
+            });
+        }
+
         function renderSymbolPage() {
             const list = document.getElementById('funcList');
             const paginationBar = document.getElementById('symPaginationBar');
@@ -1579,10 +1765,20 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             const startIndex = (symPageCurrent - 1) * SYM_PAGE_SIZE;
             const endIndex = Math.min(startIndex + currentPagedFuncs.length, symTotalCount);
 
-            list.innerHTML = currentPagedFuncs.map(f => `
-                <div class="func-card">
-                    <div class="func-top" style="flex-wrap: wrap; gap: 6px;">
-                        <span class="func-offset">${f.offset}</span>
+            list.innerHTML = currentPagedFuncs.map(f => {
+                const isSelected = selectedBatchFunctions.has(f.offset);
+                const cardStyle = isSelected 
+                    ? 'border-color: var(--purple); background: rgba(168, 85, 247, 0.08); box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);' 
+                    : '';
+                return `
+                <div class="func-card" style="${cardStyle}">
+                    <div class="func-top" style="flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${isBatchMode ? `
+                                <input type="checkbox" class="batch-checkbox" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--purple);" ${isSelected ? 'checked' : ''} onchange="toggleBatchItem('${f.offset}', '${escapeHtml(f.name)}', this.checked)">
+                            ` : ''}
+                            <span class="func-offset">${f.offset}</span>
+                        </div>
                         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                             <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}', 'dobby')" title="Native inline ARM64 hook via Zygisk">⚡ Dobby</button>
                             <button class="btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}', 'frida_spawn')" title="Cold start spawn with Frida">⚡ Frida (Spawn)</button>
@@ -1599,7 +1795,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                         </div>
                     ` : ''}
                 </div>
-            `).join('');
+            `;}).join('');
 
             if (paginationBar) {
                 paginationBar.style.display = 'flex';
@@ -1653,8 +1849,9 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 body: JSON.stringify({ 
                     action: 'add', 
                     offset: offset, 
-                    name: name,
+                    name: name, 
                     engine: engine,
+                    basicOnly: isCallsOnly,
                     traceReturn: true
                 })
             })
