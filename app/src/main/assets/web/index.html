@@ -725,8 +725,9 @@
                     </div>
                     <div class="toolbar-group">
                         <span id="logCount" style="font-size: 11px; color: var(--text-muted);">0 lines</span>
+                        <button class="btn btn-rose" id="stopHooksBtn" onclick="stopHooks()" title="Stop and detach all active hooks across Dobby & Frida">⏹ Stop Hooks</button>
                         <button class="btn" onclick="copyLogs()">Copy All</button>
-                        <button class="btn btn-rose" onclick="clearTerminal()">Clear</button>
+                        <button class="btn" onclick="clearTerminal()">Clear</button>
                     </div>
                 </div>
                 <div class="terminal-screen" id="terminal"></div>
@@ -754,6 +755,7 @@
                         <button class="btn btn-purple" onclick="applyLabHook('dobby')" title="Hook natively via Dobby">⚡ Dobby</button>
                         <button class="btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="applyLabHook('frida_spawn')" title="Cold start spawn with Frida">⚡ Frida (Spawn)</button>
                         <button class="btn" style="border-color: var(--emerald); color: var(--emerald);" onclick="applyLabHook('frida_attach')" title="Attach to running PID with Frida">⚡ Frida (Attach)</button>
+                        <button class="btn btn-rose" onclick="stopHooks()" title="Stop and detach active hooks">⏹ Stop Hooks</button>
                     </div>
                 </div>
 
@@ -818,6 +820,7 @@
                         <button class="btn btn-purple" id="batchDobbyBtn" onclick="deployBatchHook('dobby')" title="Hook selected functions natively via Dobby (clears previous hooks)">⚡ Dobby Batch</button>
                         <button class="btn" id="batchFridaSpawnBtn" style="border-color: var(--cyan); color: var(--cyan);" onclick="deployBatchHook('frida_spawn')" title="Cold start spawn selected functions with Frida">⚡ Frida Spawn</button>
                         <button class="btn" id="batchFridaAttachBtn" style="border-color: var(--emerald); color: var(--emerald);" onclick="deployBatchHook('frida_attach')" title="Attach to running PID for selected functions with Frida">⚡ Frida Attach</button>
+                        <button class="btn btn-rose" onclick="stopHooks()" title="Stop and detach all active hooks across both engines">⏹ Stop All Hooks</button>
                     </div>
                 </div>
                 <div class="func-list" id="funcList">
@@ -867,6 +870,13 @@
                             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                                 <code id="snapSdkHash" style="font-size: 13px; color: var(--emerald); font-family: monospace; word-break: break-all;">--</code>
                                 <button class="btn" style="padding: 4px 8px; font-size: 10px;" onclick="copySdkHash()">Copy</button>
+                            </div>
+                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border);">
+                                <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">libapp.so Base Address</div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                    <code id="snapLibAppBase" style="font-size: 13px; color: var(--cyan); font-family: monospace;">--</code>
+                                    <button class="btn" style="padding: 4px 8px; font-size: 10px;" onclick="copyLibAppBase()">Copy</button>
+                                </div>
                             </div>
                         </div>
                         <div style="background: var(--bg-surface-var); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
@@ -1116,7 +1126,10 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
         function formatLine(line) {
             let text = line;
             if (isClean) {
-                text = text.replace(/,\s*0x[0-9a-fA-F]{6,16}/g, '').replace(/\s*\((0x[0-9a-fA-F]{6,16})\)/g, '');
+                const isHitLine = (text.startsWith('[★]') || text.startsWith('[+]') || text.includes('HIT:'));
+                if (!isHitLine) {
+                    text = text.replace(/,\s*0x[0-9a-fA-F]{6,16}/g, '').replace(/\s*\((0x[0-9a-fA-F]{6,16})\)/g, '');
+                }
                 if ((text.includes('Uint8List(') || text.includes('Bytes(')) && text.includes('-> [')) {
                     const withoutAsciiPreview = text.replace(/\s*\("[^"]*"\)\s*/g, '');
                     if (!(text.includes('Instance(') && withoutAsciiPreview.includes('"'))) {
@@ -1129,14 +1142,30 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
             if (text.startsWith('[★]') || text.startsWith('[+]') || text.includes('⚡ HIT:') || text.includes('HIT:')) {
                 // Extract function name and optional offset for Promote to Handler & Trace Lab
-                const fnMatch = text.match(/HIT:\s*([A-Za-z0-9_$.]+)(?:\s*\((0x[0-9a-fA-F]+|\d+)\))?/);
+                const fnMatch = text.match(/HIT:\s*([A-Za-z0-9_$.]+)(?:\s*\(([^)]+)\))?/);
                 const fnName = fnMatch ? fnMatch[1] : '';
-                let hitOff = fnMatch && fnMatch[2] ? fnMatch[2] : '';
-                if (hitOff && !hitOff.startsWith('0x')) {
-                    hitOff = '0x' + parseInt(hitOff, 10).toString(16);
+                let hitOff = fnMatch && fnMatch[2] ? fnMatch[2].trim() : '';
+                if (!hitOff && fnName && typeof knownHookOffsets !== 'undefined' && knownHookOffsets.has(fnName)) {
+                    hitOff = knownHookOffsets.get(fnName);
+                }
+                if (hitOff) {
+                    if (hitOff.startsWith('0x') || hitOff.startsWith('0X')) {
+                        hitOff = '0x' + hitOff.substring(2).toLowerCase();
+                    } else {
+                        const n = parseInt(hitOff, 10);
+                        if (!isNaN(n)) {
+                            hitOff = '0x' + n.toString(16).toLowerCase();
+                        } else {
+                            hitOff = '0x' + hitOff.toLowerCase();
+                        }
+                    }
                 }
                 if (fnName && hitOff && typeof knownHookOffsets !== 'undefined') {
                     knownHookOffsets.set(fnName, hitOff);
+                }
+                let lineHtml = esc;
+                if (fnName && hitOff && !fnName.startsWith('0x')) {
+                    lineHtml = lineHtml.replace(new RegExp(`(HIT:\\s*${escapeHtml(fnName)})(?:\\s*\\([^)]+\\))?`), `$1 (${escapeHtml(hitOff)})`);
                 }
                 const actionBtns = fnName ? `
                     <div style="float: right; display: flex; gap: 4px; margin-top: -2px;">
@@ -1144,7 +1173,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                         <button class="btn" style="font-size: 10px; padding: 2px 7px; border-color: var(--cyan); color: var(--cyan);" onclick="generateHandlerFromLiveHit('${escapeHtml(fnName)}', '${hitOff}')">📋 Copy Handler</button>
                     </div>
                 ` : '';
-                return `<div class="terminal-line log-hit">${esc} ${actionBtns}</div>`;
+                return `<div class="terminal-line log-hit">${lineHtml} ${actionBtns}</div>`;
             } else if (text.startsWith('[✓]') || text.includes('RETURN:')) {
                 return `<div class="terminal-line log-return">${esc}</div>`;
             } else if (text.startsWith('[-]') || text.toLowerCase().includes('error')) {
@@ -1363,6 +1392,27 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             fetch('/api/clear-console', { method: 'POST' }).catch(() => {});
         }
 
+        function stopHooks() {
+            showToast("Stopping and detaching active hooks...");
+            fetch('/api/hooks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'stop' })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    showToast(res.message || "Hooks stopped and detached!");
+                    fetchStatus();
+                } else {
+                    showToast("Failed to stop hooks: " + (res.error || res.message));
+                }
+            })
+            .catch(err => {
+                showToast("Error stopping hooks: " + err);
+            });
+        }
+
         function copyLogs() {
             navigator.clipboard.writeText(logs.join('\n')).then(() => {
                 showToast('All logs copied to clipboard!');
@@ -1454,6 +1504,18 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             if (data.basicOnly !== undefined) {
                 if (isCallsOnly !== Boolean(data.basicOnly)) {
                     setCallsOnly(data.basicOnly);
+                }
+            }
+            const stopBtn = document.getElementById('stopHooksBtn');
+            if (stopBtn) {
+                if (data.isHookRunning) {
+                    stopBtn.innerHTML = `⏹ Stop Hooks (${data.engine || 'Active'})`;
+                    stopBtn.style.opacity = '1';
+                    stopBtn.style.boxShadow = '0 0 10px rgba(244, 63, 94, 0.4)';
+                } else {
+                    stopBtn.innerHTML = '⏹ Stop Hooks';
+                    stopBtn.style.opacity = '0.7';
+                    stopBtn.style.boxShadow = 'none';
                 }
             }
         }
@@ -1887,7 +1949,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
     Interceptor.attach(targetAddr, {
         onEnter: function(args) {
-            console.log("\\n[★] ⚡ HIT: ${name}");
+            console.log("\\n[★] ⚡ HIT: ${name} (0x" + TARGET_OFFSET.toString(16) + ")");
 
             // --- 1. REGISTER ARGUMENTS ---
 ${paramLogs || '            // args[0] (this/recv)'}
@@ -2177,7 +2239,7 @@ ${paramLogs || '            // args[0] (this/recv)'}
 
     Interceptor.attach(targetAddr, {
         onEnter: function(args) {
-            console.log("\\n[★] ⚡ HIT: ${fnName}");
+            console.log("\\n[★] ⚡ HIT: ${fnName} (0x" + TARGET_OFFSET.toString(16) + ")");
 
             // --- 1. REGISTER ARGUMENTS ---
             // const arg0 = args[0]; // this/receiver
@@ -2441,6 +2503,9 @@ ${tamperStringRecipe}
                 targetBadge.textContent = `Target: ${data.package || activeTarget || 'None'}`;
             }
 
+            const libBaseEl = document.getElementById('snapLibAppBase');
+            if (libBaseEl) libBaseEl.textContent = data.libappBase || '--';
+
             if (!data.valid) {
                 document.getElementById('snapKindBadge').textContent = 'Unknown';
                 document.getElementById('snapMagicBadge').textContent = '--';
@@ -2578,6 +2643,14 @@ ${tamperStringRecipe}
             if (!h || h === '--') return;
             navigator.clipboard.writeText(h).then(() => {
                 showToast(`SDK Hash copied: ${h}`);
+            });
+        }
+
+        function copyLibAppBase() {
+            const b = (currentSnapshot && currentSnapshot.libappBase) || (document.getElementById('snapLibAppBase') ? document.getElementById('snapLibAppBase').textContent.trim() : '');
+            if (!b || b === '--') return;
+            navigator.clipboard.writeText(b).then(() => {
+                showToast(`libapp.so base address copied: ${b}`);
             });
         }
 

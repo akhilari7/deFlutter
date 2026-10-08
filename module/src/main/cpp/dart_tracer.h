@@ -1,5 +1,5 @@
 // FlutterInspect native Dart AOT function tracer using Dobby
-// Author: Akshay Khilari (Payatu)
+// Author: Akshay Khilari
 #pragma once
 
 #include <cstdint>

@@ -1,11 +1,11 @@
-// FlutterInspect native Zygisk module.
-// Forked from FlutterTap by Eduardo Lopes. FlutterInspect by Akshay Khilari.
+// deFlutter native Zygisk module.
+// Forked from FlutterTap by Eduardo Lopes. deFlutter by Akshay Khilari.
 plugins {
     id("com.android.library")
 }
 
 android {
-    namespace = "com.payatu.flutterlens.module"
+    namespace = "com.akhilari.deflutter.module"
     compileSdk = 35
     ndkVersion = "27.2.12479018"
 

@@ -1,5 +1,5 @@
 // FlutterInspect native Dart AOT function tracer using Dobby
-// Author: Akshay Khilari (Payatu)
+// Author: Akshay Khilari
 #include "dart_tracer.h"
 
 #include <android/log.h>
@@ -798,6 +798,7 @@ void dart_entry_dbi_callback(RegisterContext *ctx, const HookEntryInfo *info) {
     if (!ctx || !info) return;
     uintptr_t target_addr = reinterpret_cast<uintptr_t>(info->target_address);
     std::string name = "unknown";
+    uintptr_t target_offset = 0;
     bool trace_ret = true;
     std::vector<std::string> param_names;
 
@@ -806,6 +807,7 @@ void dart_entry_dbi_callback(RegisterContext *ctx, const HookEntryInfo *info) {
         for (const auto &ih : g_installed_hooks) {
             if (ih.runtime_addr == target_addr) {
                 name = ih.target.name;
+                target_offset = ih.target.offset;
                 trace_ret = ih.target.trace_return;
                 param_names = ih.target.param_names;
                 break;
@@ -813,7 +815,9 @@ void dart_entry_dbi_callback(RegisterContext *ctx, const HookEntryInfo *info) {
         }
     }
 
-    std::string hit_msg = "[★] ⚡ HIT: " + name;
+    char off_buf[32];
+    snprintf(off_buf, sizeof(off_buf), "0x%zx", target_offset);
+    std::string hit_msg = "[★] ⚡ HIT: " + name + " (" + off_buf + ")";
     trace_output(hit_msg);
 
 #if defined(__arm64__) || defined(__aarch64__)

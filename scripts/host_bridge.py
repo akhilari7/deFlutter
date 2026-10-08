@@ -195,7 +195,7 @@ def ensure_web_server_running(port=8088):
     # Wake up / launch deFlutter with start_web_server intent extra
     print("[*] deFlutter Web Terminal not detected. Triggering auto-start on device...")
     try:
-        run_cmd("adb shell am start -n com.payatu.flutterinspect/.MainActivity --ez start_web_server true")
+        run_cmd("adb shell am start -n com.akhilari.deflutter/.MainActivity --ez start_web_server true")
     except Exception as e:
         print(f"[!] Warning: Could not send start intent to deFlutter: {e}")
 

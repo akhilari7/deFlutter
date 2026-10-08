@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.payatu.flutterinspect"
+    namespace = "com.akhilari.deflutter"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.payatu.flutterinspect"
+        applicationId = "com.akhilari.deflutter"
         minSdk = 29
         targetSdk = 35
         versionCode = 2
