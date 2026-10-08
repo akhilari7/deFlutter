@@ -4,8 +4,8 @@
 //
 // Lifecycle:
 //   onLoad()              — called in zygote; do NOTHING that mutates global state
-//                           (see docs/ARCHITECTURE.md for why — ZN Linker preloads
-//                            modules in zygote and signal dispositions survive fork)
+//                           (ZN Linker preloads modules in zygote and signal
+//                            dispositions survive fork)
 //   preAppSpecialize()    — check if this process is a target; DLCLOSE if not
 //   postAppSpecialize()   — spawn background monitoring thread
 //   [monitoring thread]   — poll dl_iterate_phdr for libapp.so / libflutter.so
