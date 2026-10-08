@@ -173,10 +173,50 @@ def run_blutter_local(work_dir, blutter_path):
     if res2.returncode != 0:
         raise RuntimeError("Failed to convert blutter output to symbols.json")
 
-def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
-    """Sends symbols.json to FlutterInspect via fast ADB push + API sync."""
+def ensure_web_server_running(port=8088):
+    """Ensures deFlutter manager app is running, web server is started, and ADB port is forwarded."""
     print(f"\n[*] Forwarding port {port} to device via ADB...")
-    run_cmd(f"adb forward tcp:{port} tcp:{port}")
+    try:
+        run_cmd(f"adb forward tcp:{port} tcp:{port}")
+    except Exception as e:
+        print(f"[!] Warning: ADB forward failed: {e}")
+
+    # Check if web server is already responding
+    status_url = f"http://localhost:{port}/api/status"
+    try:
+        req = urllib.request.Request(status_url, headers={"User-Agent": "deFlutterBridge/2.0"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if resp.status == 200:
+                print(f"[✓] deFlutter Web Terminal is already active on port {port}.")
+                return True
+    except Exception:
+        pass
+
+    # Wake up / launch deFlutter with start_web_server intent extra
+    print("[*] deFlutter Web Terminal not detected. Triggering auto-start on device...")
+    try:
+        run_cmd("adb shell am start -n com.payatu.flutterinspect/.MainActivity --ez start_web_server true")
+    except Exception as e:
+        print(f"[!] Warning: Could not send start intent to deFlutter: {e}")
+
+    # Wait up to 6 seconds for server initialization
+    for attempt in range(6):
+        time.sleep(1)
+        try:
+            req = urllib.request.Request(status_url, headers={"User-Agent": "deFlutterBridge/2.0"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    print(f"[✓] deFlutter Web Terminal started successfully on port {port}.")
+                    return True
+        except Exception:
+            continue
+
+    print(f"[*] Note: Port {port} forward is set. Attempting sync...")
+    return False
+
+def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
+    """Sends symbols.json to deFlutter via fast ADB push + API sync."""
+    ensure_web_server_running(port=port)
 
     file_size_mb = os.path.getsize(symbols_json_path) / (1024 * 1024)
     print(f"[*] Symbols file size: {file_size_mb:.2f} MB")
@@ -184,9 +224,9 @@ def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
     # Fast-path: Push directly to device storage over USB ADB
     # /data/local/tmp is universal POSIX Linux storage accessible to all apps without Scoped Storage restrictions
     remote_tmp_file = f"/data/local/tmp/{pkg_name}_symbols.json"
-    remote_pkg_dir = f"/sdcard/Download/FlutterInspect/{pkg_name}"
+    remote_pkg_dir = f"/sdcard/Download/deFlutter/{pkg_name}"
     remote_pkg_file = f"{remote_pkg_dir}/symbols.json"
-    remote_generic_file = "/sdcard/Download/FlutterInspect/symbols.json"
+    remote_generic_file = "/sdcard/Download/deFlutter/symbols.json"
 
     adb_pushed = False
     try:
@@ -203,7 +243,7 @@ def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
         print(f"[!] Direct ADB push encountered an issue ({e}), falling back to HTTP upload...")
 
     url = f"http://localhost:{port}/api/load-symbols?pkg={pkg_name}&path={remote_tmp_file}" if adb_pushed else f"http://localhost:{port}/api/upload-symbols"
-    print(f"[*] Synchronizing with FlutterInspect API: {url} (target: {pkg_name})")
+    print(f"[*] Synchronizing with deFlutter API: {url} (target: {pkg_name})")
 
     if adb_pushed:
         req = urllib.request.Request(
@@ -230,7 +270,7 @@ def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
                 resp_text = resp.read().decode('utf-8')
                 result = json.loads(resp_text)
                 if result.get("success"):
-                    print(f"\n[✓] SUCCESS! FlutterInspect live synchronization complete:")
+                    print(f"\n[✓] SUCCESS! deFlutter live synchronization complete:")
                     print(f"    ├── Functions Loaded: {result.get('functions', 0)}")
                     print(f"    ├── Classes Loaded:   {result.get('classes', 0)}")
                     print(f"    └── Message:          {result.get('message', 'OK')}")
@@ -243,8 +283,8 @@ def upload_symbols_to_device(symbols_json_path, pkg_name, port=8088):
                 print(f"[*] Device port {port} not responding yet, waiting 2s... (attempt {attempt+1})")
                 time.sleep(2)
             else:
-                print(f"[!] Failed connecting to Deflutter API at {url}: {e}")
-                print(f"[*] Please ensure Deflutter App is running on the device.")
+                print(f"[!] Failed connecting to deFlutter API at {url}: {e}")
+                print(f"[*] Please ensure deFlutter App is running on the device.")
                 return False
     return False
 
@@ -326,7 +366,7 @@ def main():
         print(f"[!] Error: Expected symbols file {symbols_json} was not generated.")
         sys.exit(1)
 
-    # 3. Synchronize with FlutterInspect
+    # 3. Synchronize with deFlutter
     if not args.skip_upload:
         upload_symbols_to_device(symbols_json, target_pkg, port=args.port)
     else:

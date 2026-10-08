@@ -109,6 +109,8 @@ object RootShell {
                 if (config.process.isNotBlank()) {
                     val appCache = "/data/data/${config.process}/cache"
                     writer.write("mkdir -p $appCache\n")
+                    writer.write("chmod 777 $appCache\n")
+                    writer.write("touch $appCache/flutterlens.json 2>/dev/null; chmod 666 $appCache/flutterlens.json 2>/dev/null\n")
                     writer.write("cat << 'EOF' > $appCache/flutterlens_config.json\n$json\nEOF\n")
                     writer.write("chmod 666 $appCache/flutterlens_config.json\n")
                 }
@@ -144,6 +146,8 @@ object RootShell {
         val possiblePaths = listOf(
             "/data/data/$packageName/cache/flutterlens.json",
             "/data/user/0/$packageName/cache/flutterlens.json",
+            "/data/data/$packageName/files/flutterlens.json",
+            "/data/user/0/$packageName/files/flutterlens.json",
             "/data/local/tmp/flutterlens_$safePkg.json",
             "/data/local/tmp/flutterlens.json"
         )

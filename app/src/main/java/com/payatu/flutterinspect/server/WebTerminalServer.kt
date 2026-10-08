@@ -65,6 +65,8 @@ object WebTerminalServer {
     private var cachedHtml: String? = null
     private lateinit var appContext: Context
 
+    private var activeFridaSession: RootShell.FridaSession? = null
+
     fun getPort(): Int = PORT
 
     fun start(context: Context): Result<Unit> {
@@ -153,40 +155,82 @@ object WebTerminalServer {
                             call.respondText(root.toString(), ContentType.Application.Json)
                         }
 
-                        // 2. Query Symbols / Functions
+                        // 2. Query Symbols / Functions (Supports server-side pagination)
                         get("/functions") {
                             val query = call.parameters["q"] ?: ""
-                            val limit = call.parameters["limit"]?.toIntOrNull() ?: 1500
-                            val functions = if (query.isBlank()) {
-                                SymbolManager.getAllFunctions(limit)
-                            } else {
-                                SymbolManager.searchFunctions(query, limit)
-                            }
+                            val pageParam = call.parameters["page"]?.toIntOrNull()
+                            val pageSizeParam = call.parameters["pageSize"]?.toIntOrNull()
+                                ?: call.parameters["limit"]?.toIntOrNull()
 
-                            val arr = JSONArray()
-                            functions.forEach { f ->
-                                val fObj = JSONObject()
-                                fObj.put("offset", f.offset)
-                                fObj.put("name", f.name)
-                                fObj.put("className", f.className)
-                                fObj.put("method", f.method)
-                                fObj.put("lib", f.lib)
+                            if (pageParam != null) {
+                                // Server-side pagination mode
+                                val page = if (pageParam < 1) 1 else pageParam
+                                val pageSize = if (pageSizeParam == null || pageSizeParam < 1) 50 else pageSizeParam.coerceAtMost(500)
+                                val paged = SymbolManager.queryFunctionsPaged(query, page, pageSize)
 
-                                val pArr = JSONArray()
-                                f.params.forEach { p ->
-                                    val pObj = JSONObject()
-                                    pObj.put("idx", p.idx)
-                                    pObj.put("name", p.name)
-                                    pObj.put("type", p.type)
-                                    pObj.put("reg", p.reg)
-                                    pObj.put("slot", p.slot)
-                                    pArr.put(pObj)
+                                val root = JSONObject()
+                                root.put("total", paged.total)
+                                root.put("page", paged.page)
+                                root.put("pageSize", paged.pageSize)
+                                root.put("totalPages", paged.totalPages)
+
+                                val arr = JSONArray()
+                                paged.items.forEach { f ->
+                                    val fObj = JSONObject()
+                                    fObj.put("offset", f.offset)
+                                    fObj.put("name", f.name)
+                                    fObj.put("className", f.className)
+                                    fObj.put("method", f.method)
+                                    fObj.put("lib", f.lib)
+
+                                    val pArr = JSONArray()
+                                    f.params.forEach { p ->
+                                        val pObj = JSONObject()
+                                        pObj.put("idx", p.idx)
+                                        pObj.put("name", p.name)
+                                        pObj.put("type", p.type)
+                                        pObj.put("reg", p.reg)
+                                        pObj.put("slot", p.slot)
+                                        pArr.put(pObj)
+                                    }
+                                    fObj.put("params", pArr)
+                                    arr.put(fObj)
                                 }
-                                fObj.put("params", pArr)
-                                arr.put(fObj)
-                            }
+                                root.put("items", arr)
+                                call.respondText(root.toString(), ContentType.Application.Json)
+                            } else {
+                                // Legacy flat list mode (e.g. for small limit queries like limit=10)
+                                val limit = pageSizeParam ?: 20000
+                                val functions = if (query.isBlank()) {
+                                    SymbolManager.getAllFunctions(limit)
+                                } else {
+                                    SymbolManager.searchFunctions(query, limit)
+                                }
 
-                            call.respondText(arr.toString(), ContentType.Application.Json)
+                                val arr = JSONArray()
+                                functions.forEach { f ->
+                                    val fObj = JSONObject()
+                                    fObj.put("offset", f.offset)
+                                    fObj.put("name", f.name)
+                                    fObj.put("className", f.className)
+                                    fObj.put("method", f.method)
+                                    fObj.put("lib", f.lib)
+
+                                    val pArr = JSONArray()
+                                    f.params.forEach { p ->
+                                        val pObj = JSONObject()
+                                        pObj.put("idx", p.idx)
+                                        pObj.put("name", p.name)
+                                        pObj.put("type", p.type)
+                                        pObj.put("reg", p.reg)
+                                        pObj.put("slot", p.slot)
+                                        pArr.put(pObj)
+                                    }
+                                    fObj.put("params", pArr)
+                                    arr.put(fObj)
+                                }
+                                call.respondText(arr.toString(), ContentType.Application.Json)
+                            }
                         }
 
                         // 2b. Dart VM Snapshot Info & Discovered Packages
@@ -246,13 +290,16 @@ object WebTerminalServer {
                             try {
                                 val json = JSONObject(body)
                                 val action = json.optString("action", "add")
+                                val engineMode = json.optString("engine", "dobby").lowercase()
                                 val targetProc = TraceLogBroadcaster.activeTarget.value
 
-                                if (action == "clear") {
+                                if (action == "clear" || action == "stop") {
+                                    activeFridaSession?.stop()
+                                    activeFridaSession = null
                                     TraceLogBroadcaster.updateActiveHooks(emptyList())
                                     TraceLogBroadcaster.updateHookState(false)
                                     RootShell.clearDobbyHooks(targetProc)
-                                    TraceLogBroadcaster.postLog("[*] Hooks cleared via Web Terminal API.")
+                                    TraceLogBroadcaster.postLog("[*] Hooks cleared and detached via Web Terminal API.")
                                     call.respondText(JSONObject().put("success", true).put("message", "Hooks cleared").toString(), ContentType.Application.Json)
                                 } else {
                                     val rawOff = json.optString("offset", "")
@@ -263,32 +310,93 @@ object WebTerminalServer {
                                         val symFunc = SymbolManager.findFunction(rawOff)
                                         val paramNames = symFunc?.params?.map { it.name } ?: emptyList()
 
-                                        val newHook = HookTargetConfig(
-                                            offset = off,
-                                            name = name,
-                                            traceReturn = true,
-                                            params = paramNames
-                                        )
+                                        if (engineMode.startsWith("frida")) {
+                                            // FRIDA HOOKING (SPAWN or ATTACH)
+                                            val isAttach = (engineMode == "frida_attach" || json.optBoolean("attach", false))
+                                            val traceReturn = json.optBoolean("traceReturn", true)
+                                            val basicOnly = json.optBoolean("basicOnly", false)
 
-                                        val currentList = TraceLogBroadcaster.activeHooks.value.filter { it.offset != off }.toMutableList()
-                                        currentList.add(newHook)
+                                            val targetFunctionEntry = com.payatu.flutterinspect.data.models.FunctionEntry(
+                                                offset = rawOff,
+                                                name = name
+                                            )
 
-                                        TraceLogBroadcaster.updateActiveHooks(currentList)
-                                        TraceLogBroadcaster.updateHookState(true, "DOBBY")
+                                            val customScript = json.optString("customScript", "")
+                                            val script = if (customScript.isNotBlank()) {
+                                                customScript
+                                            } else {
+                                                val template = if (basicOnly) {
+                                                    com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.TemplateType.BASIC_TRACE
+                                                } else {
+                                                    com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.TemplateType.DART_ARG_INSPECTOR
+                                                }
 
-                                        val dispatchRes = RootShell.startDobbyTracer(
-                                            packageName = targetProc,
-                                            hooks = currentList,
-                                            onLogLine = { line ->
-                                                TraceLogBroadcaster.postLog(line)
+                                                com.payatu.flutterinspect.data.frida.FridaSnippetGenerator.generateSnippet(
+                                                    templateType = template,
+                                                    targetLib = "libapp.so",
+                                                    targetFunc = targetFunctionEntry,
+                                                    isVerbose = json.optBoolean("verbose", false),
+                                                    traceReturn = traceReturn
+                                                )
                                             }
-                                        )
 
-                                        TraceLogBroadcaster.postLog("[✓] Dispatched hook for $name ($rawOff) via Web Terminal")
-                                        val resp = JSONObject()
-                                        resp.put("success", dispatchRes.isSuccess)
-                                        resp.put("message", if (dispatchRes.isSuccess) "Hooked $name ($rawOff)" else "Failed to dispatch hook")
-                                        call.respondText(resp.toString(), ContentType.Application.Json)
+                                            // Stop prior sessions
+                                            activeFridaSession?.stop()
+                                            activeFridaSession = null
+
+                                            TraceLogBroadcaster.postLog("[*] Initializing Frida Web Dispatch ($name @ $rawOff)...")
+                                            TraceLogBroadcaster.postLog("[*] Mode: ${if (isAttach) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
+                                            TraceLogBroadcaster.updateHookState(true, "FRIDA")
+
+                                            val fridaRes = RootShell.startFridaInterceptor(
+                                                packageName = targetProc,
+                                                scriptContent = script,
+                                                isAttachMode = isAttach,
+                                                onLogLine = { line ->
+                                                    TraceLogBroadcaster.postLog(line)
+                                                }
+                                            )
+
+                                            if (fridaRes.isSuccess) {
+                                                activeFridaSession = fridaRes.getOrNull()
+                                                TraceLogBroadcaster.postLog("[✓] Frida interceptor successfully active for $targetProc")
+                                                val resp = JSONObject().put("success", true).put("message", "Frida hook active for $name ($rawOff)")
+                                                call.respondText(resp.toString(), ContentType.Application.Json)
+                                            } else {
+                                                TraceLogBroadcaster.updateHookState(false, "FRIDA")
+                                                val errMsg = "[-] Frida failed: ${fridaRes.exceptionOrNull()?.message}"
+                                                TraceLogBroadcaster.postLog(errMsg)
+                                                call.respondText(JSONObject().put("success", false).put("error", errMsg).toString(), ContentType.Application.Json)
+                                            }
+                                        } else {
+                                            // DOBBY HOOKING
+                                            val newHook = HookTargetConfig(
+                                                offset = off,
+                                                name = name,
+                                                traceReturn = true,
+                                                params = paramNames
+                                            )
+
+                                            val currentList = TraceLogBroadcaster.activeHooks.value.filter { it.offset != off }.toMutableList()
+                                            currentList.add(newHook)
+
+                                            TraceLogBroadcaster.updateActiveHooks(currentList)
+                                            TraceLogBroadcaster.updateHookState(true, "DOBBY")
+
+                                            val dispatchRes = RootShell.startDobbyTracer(
+                                                packageName = targetProc,
+                                                hooks = currentList,
+                                                onLogLine = { line ->
+                                                    TraceLogBroadcaster.postLog(line)
+                                                }
+                                            )
+
+                                            TraceLogBroadcaster.postLog("[✓] Dispatched Dobby hook for $name ($rawOff) via Web Terminal")
+                                            val resp = JSONObject()
+                                            resp.put("success", dispatchRes.isSuccess)
+                                            resp.put("message", if (dispatchRes.isSuccess) "Hooked $name ($rawOff) with Dobby" else "Failed to dispatch hook")
+                                            call.respondText(resp.toString(), ContentType.Application.Json)
+                                        }
                                     } else {
                                         call.respondText(JSONObject().put("success", false).put("error", "Invalid offset").toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
                                     }

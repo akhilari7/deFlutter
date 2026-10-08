@@ -24,16 +24,17 @@ object FridaSnippetGenerator {
         targetLib: String,
         targetFunc: FunctionEntry?,
         allFuncs: List<FunctionEntry> = emptyList(),
-        isVerbose: Boolean = false
+        isVerbose: Boolean = false,
+        traceReturn: Boolean = true
     ): String {
         return when (templateType) {
-            TemplateType.BASIC_TRACE -> generateBasicHook(targetLib, targetFunc, isVerbose)
-            TemplateType.DART_ARG_INSPECTOR -> generateDartArgInspector(targetLib, targetFunc, isVerbose)
+            TemplateType.BASIC_TRACE -> generateBasicHook(targetLib, targetFunc, isVerbose, traceReturn)
+            TemplateType.DART_ARG_INSPECTOR -> generateDartArgInspector(targetLib, targetFunc, isVerbose, traceReturn)
             TemplateType.MULTI_FUNCTION_BATCH -> generateBatchHook(targetLib, allFuncs, isVerbose)
         }
     }
 
-    private fun generateBasicHook(targetLib: String, func: FunctionEntry?, isVerbose: Boolean): String {
+    private fun generateBasicHook(targetLib: String, func: FunctionEntry?, isVerbose: Boolean, traceReturn: Boolean): String {
         val name = func?.name ?: "target_function"
         val offset = func?.offset ?: "0x0"
 
@@ -53,9 +54,19 @@ object FridaSnippetGenerator {
             "console.log(`\\n[★] Hit ` + FUNC_NAME);"
         }
 
+        val onLeaveBlock = if (traceReturn) {
+            """
+                    onLeave: function(retval) {
+                        console.log(`[✓] Left ` + FUNC_NAME + ` -> Retval: ` + retval);
+                    }
+            """.trimIndent()
+        } else {
+            "// onLeave skipped (Return tracing disabled)"
+        }
+
         return """
             /**
-             * FlutterInspect Frida Script: Basic Function Tracer
+             * deFlutter Frida Script: Basic Function Tracer
              * Target: $name
              * Module: $targetLib (Offset: $offset)
              * Verbose: $isVerbose
@@ -80,9 +91,7 @@ object FridaSnippetGenerator {
                     onEnter: function(args) {
                         $onEnterLogs
                     },
-                    onLeave: function(retval) {
-                        console.log(`[★] Left ` + FUNC_NAME + ` -> Retval: ` + retval);
-                    }
+                    $onLeaveBlock
                 });
                 return true;
             }
@@ -95,15 +104,15 @@ object FridaSnippetGenerator {
         """.trimIndent()
     }
 
-    private fun generateDartArgInspector(targetLib: String, func: FunctionEntry?, isVerbose: Boolean): String {
+    private fun generateDartArgInspector(targetLib: String, func: FunctionEntry?, isVerbose: Boolean, traceReturn: Boolean): String {
         val name = func?.name ?: "target_function"
         val offset = func?.offset ?: "0x0"
 
         return """
             /**
-             * FlutterInspect: Dart ARM64 AOT Runtime Argument & Return Inspector
+             * deFlutter: Dart ARM64 AOT Runtime Argument & Return Inspector
              * Target: $name ($offset) in $targetLib
-             * Verbose: $isVerbose
+             * Verbose: $isVerbose | TraceReturn: $traceReturn
              * 
              * Decodes:
              *  - Registers: x0 (Arg0/Recv), x1 (Arg1), x2 (Arg2), x3 (Arg3), x4 (Arg4)
@@ -650,7 +659,7 @@ object FridaSnippetGenerator {
                             } catch (_) {}
                         }
 
-                        console.log(`\n[★] ⚡ HIT: ` + FUNC_NAME);
+                        console.log(`\n[★] ⚡ HIT: ` + FUNC_NAME + ` (0x` + TARGET_OFFSET.toString(16) + `)`);
                         if (regArgs.length === 0 && frameSlots.length === 0) {
                             console.log(`    └── (no active arguments or frame data detected)`);
                         } else {
@@ -670,6 +679,7 @@ object FridaSnippetGenerator {
                             }
                         }
                     },
+                    ${if (traceReturn) """
                     onLeave: function(retval) {
                         try {
                             const elapsed = Date.now() - (this.startTime || Date.now());
@@ -685,6 +695,7 @@ object FridaSnippetGenerator {
                             console.log(`[✓] ==> RETURN: ` + (this.fnName || FUNC_NAME) + ` -> (parse error: ` + err + `)\n`);
                         }
                     }
+                    """.trimIndent() else "// onLeave skipped (Return tracing disabled)"}
                 });
                 return true;
             }
@@ -716,7 +727,7 @@ object FridaSnippetGenerator {
 
         return """
             /**
-             * FlutterInspect Batch Hook Script
+             * deFlutter Batch Hook Script
              * Targets: ${funcs.take(20).size} resolved Dart functions in $targetLib (capped to top 20 for stability)
              * Verbose: $isVerbose
              */

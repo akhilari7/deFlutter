@@ -312,13 +312,63 @@ object SymbolManager {
         return cls.fields[normOff] ?: cls.fields["0x$normOff"]
     }
 
-    fun getAllFunctions(limit: Int = 1500): List<DartSymbolFunction> {
+    fun getAllFunctions(limit: Int = 20000): List<DartSymbolFunction> {
         return synchronized(this) {
-            funcByOffset.values.asSequence().take(limit).toList()
+            if (limit <= 0) funcByOffset.values.toList()
+            else funcByOffset.values.asSequence().take(limit).toList()
         }
     }
 
-    fun searchFunctions(query: String, limit: Int = 1500): List<DartSymbolFunction> {
+    data class PagedResult<T>(
+        val total: Int,
+        val page: Int,
+        val pageSize: Int,
+        val totalPages: Int,
+        val items: List<T>
+    )
+
+    fun queryFunctionsPaged(query: String, page: Int = 1, pageSize: Int = 50): PagedResult<DartSymbolFunction> {
+        val safePage = if (page < 1) 1 else page
+        val safePageSize = if (pageSize < 1) 50 else pageSize.coerceAtMost(500)
+        val offset = (safePage - 1) * safePageSize
+
+        return synchronized(this) {
+            val seq = if (query.isBlank()) {
+                funcByOffset.values.asSequence()
+            } else {
+                val q = query.lowercase().trim()
+                val qNoUnderscore = q.replace("_", "")
+                funcByOffset.values.asSequence().filter { sf ->
+                    sf.offset.contains(q) ||
+                    sf.name.lowercase().contains(q) ||
+                    (qNoUnderscore.length >= 3 && sf.name.lowercase().replace("_", "").contains(qNoUnderscore)) ||
+                    sf.className.lowercase().contains(q) ||
+                    sf.method.lowercase().contains(q) ||
+                    sf.lib.lowercase().contains(q)
+                }
+            }
+
+            // Materialize count or compute without full array retention
+            val matchingList = seq.toList()
+            val total = matchingList.size
+            val totalPages = if (total == 0) 1 else ((total + safePageSize - 1) / safePageSize)
+            val items = if (offset >= total) {
+                emptyList()
+            } else {
+                matchingList.subList(offset, (offset + safePageSize).coerceAtMost(total))
+            }
+
+            PagedResult(
+                total = total,
+                page = safePage,
+                pageSize = safePageSize,
+                totalPages = totalPages,
+                items = items
+            )
+        }
+    }
+
+    fun searchFunctions(query: String, limit: Int = 20000): List<DartSymbolFunction> {
         if (query.isBlank()) return emptyList()
         val q = query.lowercase().trim()
         val qNoUnderscore = q.replace("_", "")

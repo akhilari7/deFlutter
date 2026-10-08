@@ -168,6 +168,14 @@ void write_results(const std::string              &process_name,
 
     FILE *f = fopen(path, "w");
     if (!f) {
+        snprintf(path, sizeof(path), "/data/user/0/%s/cache/flutterlens.json", process_name.c_str());
+        f = fopen(path, "w");
+    }
+    if (!f) {
+        snprintf(path, sizeof(path), "/data/data/%s/files/flutterlens.json", process_name.c_str());
+        f = fopen(path, "w");
+    }
+    if (!f) {
         snprintf(path, sizeof(path), "/data/local/tmp/flutterlens_%s.json", safePkg.c_str());
         f = fopen(path, "w");
     }

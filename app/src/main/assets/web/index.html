@@ -693,7 +693,7 @@
             </div>
             <div>
                 <div class="brand-title">deFlutter</div>
-                <div class="brand-subtitle">Dart AOT Web Terminal</div>
+                <div class="brand-subtitle">Dart Runtime Trace/Tamper Web Companion Terminal</div>
             </div>
         </div>
 
@@ -705,6 +705,7 @@
 
         <nav class="nav-tabs">
             <button class="tab-btn active" data-tab="terminal" onclick="switchTab('terminal')">Live Terminal</button>
+            <button class="tab-btn" data-tab="tracelab" onclick="switchTab('tracelab')">🧪 Trace/Tamper Lab</button>
             <button class="tab-btn" data-tab="symbols" onclick="switchTab('symbols')">Symbols & Functions</button>
             <button class="tab-btn" data-tab="snapshot" onclick="switchTab('snapshot')">Dart VM Snapshot</button>
             <button class="tab-btn" data-tab="workflow" onclick="switchTab('workflow')">Toolkit & Workflow</button>
@@ -731,15 +732,77 @@
             </div>
         </div>
 
-        <!-- 2. Symbols Explorer Panel -->
+        <!-- 2. Trace Lab Panel (In-Browser Tampering Studio) -->
+        <div class="tab-pane" id="pane-tracelab">
+            <div class="card" style="display: flex; flex-direction: column; gap: 14px; height: calc(100vh - 120px);">
+                <!-- Lab Header Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px; font-weight: 700; color: var(--cyan);">🧪 Trace/Tamper Lab</span>
+                            <span class="badge" style="color: var(--amber); border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); font-size: 10px;">Experimental</span>
+                            <span class="badge badge-purple" id="labTargetBadge">No function loaded</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            Interactive in-browser Dart tracing & dynamic memory tampering studio. Edit, tamper, and execute live with instant hot-reload.
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn" onclick="copyLabScript()" title="Copy script to clipboard">📋 Copy Script</button>
+                        <button class="btn" onclick="downloadLabScript()" title="Download script as .js file">💾 Download .js</button>
+                        <button class="btn btn-purple" onclick="applyLabHook('dobby')" title="Hook natively via Dobby">⚡ Dobby</button>
+                        <button class="btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="applyLabHook('frida_spawn')" title="Cold start spawn with Frida">⚡ Frida (Spawn)</button>
+                        <button class="btn" style="border-color: var(--emerald); color: var(--emerald);" onclick="applyLabHook('frida_attach')" title="Attach to running PID with Frida">⚡ Frida (Attach)</button>
+                    </div>
+                </div>
+
+                <!-- Editor Toolbar & Helper Injection -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-var); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 11.5px;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <span style="color: var(--text-muted); font-weight: 600;">Presets:</span>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('bypass_bool')" title="Override return value on exit (e.g. force true)">+ Return Value</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_smi')" title="Tamper Smi integer argument in register (args[1])">+ Smi Int (Arg)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_direct_str')" title="Tamper direct Dart String passed in register (args[1])">+ Direct String (Arg)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_model')" title="Tamper property/field inside a Class Instance / Model (e.g. Password.value)">+ Instance Field (Object)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_stack')" title="Tamper local string variable on Dart stack (x15)">+ Stack Slot String</button>
+                    </div>
+                    <div style="color: var(--text-muted); font-family: monospace; font-size: 11px;" id="labOffsetInfo">
+                        Offset: -
+                    </div>
+                </div>
+
+                <!-- Monospace Code Editor Area -->
+                <div style="flex: 1; display: flex; flex-direction: column; min-height: 380px;">
+                    <textarea id="labEditor" spellcheck="false" style="
+                        flex: 1;
+                        width: 100%;
+                        background: #090d16;
+                        color: #a5f3fc;
+                        border: 1px solid var(--border);
+                        border-radius: 8px;
+                        padding: 14px;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                        font-size: 12px;
+                        line-height: 1.6;
+                        resize: none;
+                        outline: none;
+                        white-space: pre;
+                        tab-size: 4;
+                    " placeholder="// Load a function from Symbols & Functions or click '⚡ Open in Trace Lab' from any live hit in the terminal..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Symbols Explorer Panel -->
         <div class="tab-pane" id="pane-symbols">
             <div class="card">
-                <div class="symbols-header">
+                <div class="symbols-header" style="display: flex; gap: 8px; align-items: center;">
                     <input type="text" class="search-input" id="symSearch" placeholder="Search functions (e.g. decrypt, AES, login)..." style="flex: 1;" oninput="debounceSearch()">
-                    <span id="searchStats" style="font-size: 12px; color: var(--text-muted);">Loaded symbols</span>
+                    <button class="btn" id="symClearBtn" onclick="clearSymSearch()" style="padding: 6px 12px; font-size: 11px;">✕ Clear</button>
+                    <span id="searchStats" style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">Loading symbols...</span>
                 </div>
                 <div class="func-list" id="funcList">
-                    <div style="color: var(--text-muted); padding: 20px;">Type a query to search functions...</div>
+                    <div style="color: var(--text-muted); padding: 20px;">Loading functions...</div>
                 </div>
 
                 <!-- Symbols Pagination Bar -->
@@ -1042,8 +1105,24 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
 
             const esc = escapeHtml(text);
 
-            if (text.startsWith('[★]') || text.startsWith('[+]') || text.includes('⚡ HIT:')) {
-                return `<div class="terminal-line log-hit">${esc}</div>`;
+            if (text.startsWith('[★]') || text.startsWith('[+]') || text.includes('⚡ HIT:') || text.includes('HIT:')) {
+                // Extract function name and optional offset for Promote to Handler & Trace Lab
+                const fnMatch = text.match(/HIT:\s*([A-Za-z0-9_$.]+)(?:\s*\((0x[0-9a-fA-F]+|\d+)\))?/);
+                const fnName = fnMatch ? fnMatch[1] : '';
+                let hitOff = fnMatch && fnMatch[2] ? fnMatch[2] : '';
+                if (hitOff && !hitOff.startsWith('0x')) {
+                    hitOff = '0x' + parseInt(hitOff, 10).toString(16);
+                }
+                if (fnName && hitOff && typeof knownHookOffsets !== 'undefined') {
+                    knownHookOffsets.set(fnName, hitOff);
+                }
+                const actionBtns = fnName ? `
+                    <div style="float: right; display: flex; gap: 4px; margin-top: -2px;">
+                        <button class="btn" style="font-size: 10px; padding: 2px 7px; border-color: var(--purple); color: var(--purple);" onclick="openLiveHitInTraceLab('${escapeHtml(fnName)}', '${hitOff}')">🧪 Open in Trace Lab</button>
+                        <button class="btn" style="font-size: 10px; padding: 2px 7px; border-color: var(--cyan); color: var(--cyan);" onclick="generateHandlerFromLiveHit('${escapeHtml(fnName)}', '${hitOff}')">📋 Copy Handler</button>
+                    </div>
+                ` : '';
+                return `<div class="terminal-line log-hit">${esc} ${actionBtns}</div>`;
             } else if (text.startsWith('[✓]') || text.includes('RETURN:')) {
                 return `<div class="terminal-line log-return">${esc}</div>`;
             } else if (text.startsWith('[-]') || text.toLowerCase().includes('error')) {
@@ -1053,6 +1132,7 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 const colored = esc
                     .replace(/(Arg\d+\s*\([^)]+\):)/g, '<span class="log-arg-lbl">$1</span>')
                     .replace(/(\[FP[+-]0x[0-9a-fA-F]+\]:)/g, '<span class="log-slot">$1</span>')
+                    .replace(/(\[Stack[+-]0x[0-9a-fA-F]+\]:)/g, '<span class="log-slot">$1</span>')
                     .replace(/(&quot;[^&]*&quot;)/g, '<span class="log-string">$1</span>');
                 return `<div class="terminal-line">${colored}</div>`;
             } else if (text.startsWith('[*]')) {
@@ -1271,6 +1351,8 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 .catch(() => {});
         }
 
+        const knownHookOffsets = new Map();
+
         function updateStatus(data) {
             if (data.target) {
                 activeTarget = data.target;
@@ -1291,6 +1373,13 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             }
             if (data.functionsCount !== undefined) {
                 document.getElementById('symbolsBadge').textContent = `${data.functionsCount} Symbols (${data.classesCount || 0} Classes)`;
+            }
+            if (Array.isArray(data.activeHooks)) {
+                data.activeHooks.forEach(h => {
+                    if (h.name && h.offset) {
+                        knownHookOffsets.set(h.name, h.offset);
+                    }
+                });
             }
         }
 
@@ -1409,43 +1498,66 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
             });
         }
 
-        // Symbols Search & One-Click Hook
+        // Symbols Search & One-Click Hook (Server-Side Pagination)
         let searchTimeout = null;
-        let allSymbolFuncs = [];
         let symPageCurrent = 1;
+        let symTotalPages = 1;
+        let symTotalCount = 0;
+        let currentSymQuery = '';
+        let currentPagedFuncs = [];
         const SYM_PAGE_SIZE = 50;
 
         function debounceSearch() {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                searchSymbols(document.getElementById('symSearch').value);
+                const q = document.getElementById('symSearch') ? document.getElementById('symSearch').value : '';
+                searchSymbols(q, 1);
             }, 250);
         }
 
-        function searchSymbols(query) {
-            const trimmed = (query || '').trim();
+        function clearSymSearch() {
+            const symInput = document.getElementById('symSearch');
+            if (symInput) symInput.value = '';
+            searchSymbols('', 1);
+        }
+
+        function searchSymbols(query = '', page = 1) {
+            const trimmed = (query !== undefined && query !== null ? query : '').trim();
+            currentSymQuery = trimmed;
+            symPageCurrent = page < 1 ? 1 : page;
+
             const list = document.getElementById('funcList');
             const paginationBar = document.getElementById('symPaginationBar');
             const stats = document.getElementById('searchStats');
 
-            if (!trimmed) {
-                allSymbolFuncs = [];
-                if (stats) stats.textContent = '0 functions found';
-                if (list) list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Type a query to search functions...</div>';
-                if (paginationBar) paginationBar.style.display = 'none';
-                return;
-            }
+            if (list) list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Fetching functions...</div>';
 
-            if (list) list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Searching symbols...</div>';
+            const endpoint = `/api/functions?page=${symPageCurrent}&pageSize=${SYM_PAGE_SIZE}&q=${encodeURIComponent(trimmed)}`;
 
-            fetch(`/api/functions?q=${encodeURIComponent(trimmed)}&limit=1500`)
+            fetch(endpoint)
                 .then(r => r.json())
-                .then(funcs => {
-                    allSymbolFuncs = Array.isArray(funcs) ? funcs : [];
-                    if (stats) {
-                        stats.textContent = `${allSymbolFuncs.length.toLocaleString()}${allSymbolFuncs.length >= 1500 ? '+' : ''} functions found`;
+                .then(res => {
+                    if (res && res.items !== undefined) {
+                        currentPagedFuncs = Array.isArray(res.items) ? res.items : [];
+                        symTotalCount = res.total || 0;
+                        symTotalPages = res.totalPages || 1;
+                        symPageCurrent = res.page || 1;
+                    } else if (Array.isArray(res)) {
+                        // Fallback in case of raw list response
+                        currentPagedFuncs = res;
+                        symTotalCount = res.length;
+                        symTotalPages = Math.ceil(res.length / SYM_PAGE_SIZE) || 1;
+                    } else {
+                        currentPagedFuncs = [];
+                        symTotalCount = 0;
+                        symTotalPages = 1;
                     }
-                    renderSymbolPage(true);
+
+                    if (stats) {
+                        const label = trimmed ? `Matching "${trimmed}"` : "All loaded";
+                        stats.textContent = `${label}: ${symTotalCount.toLocaleString()} functions`;
+                    }
+                    renderSymbolPage();
                 })
                 .catch(err => {
                     if (list) list.innerHTML = `<div style="color: var(--red); padding: 20px;">Error loading functions: ${escapeHtml(err.message || err)}</div>`;
@@ -1453,32 +1565,31 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 });
         }
 
-        function renderSymbolPage(resetPage = true) {
+        function renderSymbolPage() {
             const list = document.getElementById('funcList');
             const paginationBar = document.getElementById('symPaginationBar');
             if (!list) return;
 
-            if (resetPage) symPageCurrent = 1;
-
-            if (!allSymbolFuncs.length) {
-                list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No matching functions found.</div>';
+            if (!currentPagedFuncs.length) {
+                list.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">No functions found. Make sure symbols.json is loaded for the active target.</div>';
                 if (paginationBar) paginationBar.style.display = 'none';
                 return;
             }
 
-            const totalPages = Math.ceil(allSymbolFuncs.length / SYM_PAGE_SIZE) || 1;
-            if (symPageCurrent < 1) symPageCurrent = 1;
-            if (symPageCurrent > totalPages) symPageCurrent = totalPages;
-
             const startIndex = (symPageCurrent - 1) * SYM_PAGE_SIZE;
-            const endIndex = Math.min(startIndex + SYM_PAGE_SIZE, allSymbolFuncs.length);
-            const pageItems = allSymbolFuncs.slice(startIndex, endIndex);
+            const endIndex = Math.min(startIndex + currentPagedFuncs.length, symTotalCount);
 
-            list.innerHTML = pageItems.map(f => `
+            list.innerHTML = currentPagedFuncs.map(f => `
                 <div class="func-card">
-                    <div class="func-top">
+                    <div class="func-top" style="flex-wrap: wrap; gap: 6px;">
                         <span class="func-offset">${f.offset}</span>
-                        <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}')">⚡ Hook Dobby</button>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button class="btn btn-purple" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}', 'dobby')" title="Native inline ARM64 hook via Zygisk">⚡ Dobby</button>
+                            <button class="btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}', 'frida_spawn')" title="Cold start spawn with Frida">⚡ Frida (Spawn)</button>
+                            <button class="btn" style="border-color: var(--emerald); color: var(--emerald);" onclick="hookFunction('${f.offset}', '${escapeHtml(f.name)}', 'frida_attach')" title="Attach to running PID with Frida">⚡ Frida (Attach)</button>
+                            <button class="btn" style="border-color: var(--purple); color: var(--purple);" onclick="openLiveHitInTraceLab('${escapeHtml(f.name)}', '${f.offset}')" title="Open in Trace Lab to edit and tamper">🧪 Trace Lab</button>
+                            <button class="btn" onclick="copyFridaHandler('${f.offset}', '${escapeHtml(f.name)}', ${JSON.stringify(f.params || []).replace(/"/g, '&quot;')})" title="Copy template script to clipboard">📋 Handler</button>
+                        </div>
                     </div>
                     <div class="func-name">${escapeHtml(f.name)}</div>
                     <div class="func-lib">${escapeHtml(f.lib || f.className || '')}</div>
@@ -1494,47 +1605,554 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 paginationBar.style.display = 'flex';
                 const infoEl = document.getElementById('symPageInfo');
                 if (infoEl) {
-                    infoEl.textContent = `Showing ${(startIndex + 1).toLocaleString()} - ${endIndex.toLocaleString()} of ${allSymbolFuncs.length.toLocaleString()} functions`;
+                    infoEl.textContent = `Showing ${(startIndex + 1).toLocaleString()} - ${endIndex.toLocaleString()} of ${symTotalCount.toLocaleString()} functions`;
                 }
                 const curEl = document.getElementById('symPageCurrent');
                 if (curEl) {
-                    curEl.textContent = `Page ${symPageCurrent} / ${totalPages}`;
+                    curEl.textContent = `Page ${symPageCurrent} / ${symTotalPages}`;
                 }
                 const firstBtn = document.getElementById('symPageFirst');
-                if (firstBtn) firstBtn.disabled = (symPageCurrent === 1);
+                if (firstBtn) firstBtn.disabled = (symPageCurrent <= 1);
                 const prevBtn = document.getElementById('symPagePrev');
-                if (prevBtn) prevBtn.disabled = (symPageCurrent === 1);
+                if (prevBtn) prevBtn.disabled = (symPageCurrent <= 1);
                 const nextBtn = document.getElementById('symPageNext');
-                if (nextBtn) nextBtn.disabled = (symPageCurrent === totalPages);
+                if (nextBtn) nextBtn.disabled = (symPageCurrent >= symTotalPages);
                 const lastBtn = document.getElementById('symPageLast');
-                if (lastBtn) lastBtn.disabled = (symPageCurrent === totalPages);
+                if (lastBtn) lastBtn.disabled = (symPageCurrent >= symTotalPages);
             }
         }
 
         function changeSymPage(delta) {
-            symPageCurrent += delta;
-            renderSymbolPage(false);
-            const list = document.getElementById('funcList');
-            if (list) list.scrollTop = 0;
+            const targetPage = symPageCurrent + delta;
+            if (targetPage >= 1 && targetPage <= symTotalPages) {
+                searchSymbols(currentSymQuery, targetPage);
+                const list = document.getElementById('funcList');
+                if (list) list.scrollTop = 0;
+            }
         }
 
         function goToSymPage(target) {
-            const totalPages = Math.ceil(allSymbolFuncs.length / SYM_PAGE_SIZE) || 1;
+            let targetPage = 1;
             if (target === 'last') {
-                symPageCurrent = totalPages;
+                targetPage = symTotalPages;
             } else {
-                symPageCurrent = parseInt(target, 10) || 1;
+                targetPage = parseInt(target, 10) || 1;
             }
-            renderSymbolPage(false);
-            const list = document.getElementById('funcList');
-            if (list) list.scrollTop = 0;
+            if (targetPage >= 1 && targetPage <= symTotalPages) {
+                searchSymbols(currentSymQuery, targetPage);
+                const list = document.getElementById('funcList');
+                if (list) list.scrollTop = 0;
+            }
         }
 
-        function hookFunction(offset, name) {
+        function hookFunction(offset, name, engine = 'dobby') {
+            if (name && offset) knownHookOffsets.set(name, offset);
             fetch('/api/hooks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'add', offset: offset, name: name })
+                body: JSON.stringify({ 
+                    action: 'add', 
+                    offset: offset, 
+                    name: name,
+                    engine: engine,
+                    traceReturn: true
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                showToast(res.message || `Hook dispatched for ${name}!`);
+                switchTab('terminal');
+            })
+            .catch(err => {
+                showToast(`Failed to dispatch hook: ${err}`);
+            });
+        }
+
+        function copyFridaHandler(offset, name, params) {
+            const paramLogs = (params || []).map((p, i) => {
+                return `        // Arg${i} (${p.name || 'param' + i}): \n        // const val${i} = args[${i}];`;
+            }).join('\n');
+
+            const snippet = `/**
+ * deFlutter Custom Handler
+ * Target: ${name} (${offset}) in libapp.so
+ */
+(function() {
+    const TARGET_OFFSET = ${offset};
+    const mod = Process.findModuleByName("libapp.so");
+    if (!mod) {
+        console.error("[-] libapp.so not loaded yet");
+        return;
+    }
+
+    const targetAddr = mod.base.add(TARGET_OFFSET);
+    console.log("[+] Attached to ${name} @ " + targetAddr);
+
+    Interceptor.attach(targetAddr, {
+        onEnter: function(args) {
+            console.log("\\n[★] ⚡ HIT: ${name}");
+
+            // --- 1. REGISTER ARGUMENTS ---
+${paramLogs || '            // args[0] (this/recv)'}
+
+            // --- 2. STACK & CALLER FRAME CONTEXT ---
+            // const sp = this.context.sp;
+            // const stackVal = sp.add(0x10).readPointer();
+            // console.log("    ├─ [Stack+0x10]: " + stackVal);
+
+            // ==========================================
+            // TAMPERING / MODIFICATION RECIPES:
+            // ==========================================
+            // [A] Tamper Register Argument:
+            // args[1] = ptr(0x1); // Smi(0) or True
+
+            // [B] Tamper Stack Value:
+            // sp.add(0x10).writePointer(myTamperedPtr);
+        },
+
+        onLeave: function(retval) {
+            console.log("[✓] RETURN: ${name} -> " + retval);
+
+            // ==========================================
+            // RETURN VALUE TAMPERING:
+            // ==========================================
+            // retval.replace(ptr(0x1)); // Force True / 0
+        }
+    });
+})();
+`;
+            navigator.clipboard.writeText(snippet).then(() => {
+                showToast(`Copied Frida handler template for ${name}!`);
+            });
+        }
+
+        function resolveSymbolOffset(fnName) {
+            if (!fnName) return null;
+            const clean = fnName.replace(/^[+*⚡\s]+/, '').trim();
+
+            // 0. Active / known hooks map
+            if (knownHookOffsets.has(clean)) return knownHookOffsets.get(clean);
+            for (let [k, v] of knownHookOffsets.entries()) {
+                if (k === clean || k.endsWith('.' + clean) || clean.endsWith('.' + k)) return v;
+            }
+
+            // 1. Exact match in currently loaded page of symbols
+            let sym = currentPagedFuncs.find(f => f.name === clean);
+            if (sym && sym.offset) return sym.offset;
+
+            // 2. Class + Method match (e.g. DatabaseHelper.insertPassword vs insertPassword)
+            sym = currentPagedFuncs.find(f => f.name === clean || f.name.endsWith('.' + clean) || clean.endsWith('.' + f.name));
+            if (sym && sym.offset) return sym.offset;
+
+            // 3. Substring match inside current page symbols list
+            sym = currentPagedFuncs.find(f => f.name.toLowerCase().includes(clean.toLowerCase()));
+            if (sym && sym.offset) return sym.offset;
+
+            // 4. Try from recent logs where Dobby or Frida printed the offset: "Offset: 0x422298" or "@ 0x..." or "(0x...)"
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const l = logs[i];
+                if (l.includes(clean)) {
+                    const offMatch = l.match(/(?:\((0x[0-9a-fA-F]{3,8}|\d{4,8})\)|(?:offset[:=]?\s*|@\s*)(0x[0-9a-fA-F]{3,8}))/i);
+                    if (offMatch) {
+                        let found = offMatch[1] || offMatch[2];
+                        if (found && !found.startsWith('0x')) {
+                            found = '0x' + parseInt(found, 10).toString(16);
+                        }
+                        if (found && !found.startsWith('0x0000')) return found;
+                    }
+                }
+            }
+            return null;
+        }
+
+        async function buildTailoredHandlerScript(fnName, explicitOffset) {
+            // Find recent logs belonging to this hit
+            const hitLogs = [];
+            let recording = false;
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const l = logs[i];
+                if (l.includes(`HIT: ${fnName}`) || l.includes(`HIT:`)) {
+                    recording = true;
+                    hitLogs.unshift(l);
+                    break;
+                }
+                if (l.startsWith('[★]') || l.startsWith('[✓]')) {
+                    if (recording) break;
+                }
+                hitLogs.unshift(l);
+            }
+
+            // Extract observed stack slots, registers, and return value
+            const stackSlots = [];
+            const regArgs = [];
+            hitLogs.forEach(l => {
+                const stackMatch = l.match(/\[Stack\+0x([0-9a-fA-F]+)\](?:\s*\([^)]+\))?:\s*(.+)/);
+                if (stackMatch) {
+                    stackSlots.push({ off: '0x' + stackMatch[1], isFp: false, varName: 'sp_slot_' + stackMatch[1], val: stackMatch[2].trim() });
+                }
+                const fpMatch = l.match(/\[FP\+0x([0-9a-fA-F]+)\](?:\s*\([^)]+\))?:\s*(.+)/);
+                if (fpMatch) {
+                    stackSlots.push({ off: '0x' + fpMatch[1], isFp: true, varName: 'fp_slot_' + fpMatch[1], val: fpMatch[2].trim() });
+                }
+                const argMatch = l.match(/Arg(\d+)(?:\s*\([^)]+\))?:\s*(.+)/);
+                if (argMatch) {
+                    regArgs.push({ idx: argMatch[1], val: argMatch[2].trim() });
+                }
+            });
+
+            let resolvedOff = explicitOffset || resolveSymbolOffset(fnName);
+            if (!resolvedOff || resolvedOff.startsWith('0x0')) {
+                try {
+                    const res = await fetch(`/api/functions?q=${encodeURIComponent(fnName)}&limit=10`);
+                    const list = await res.json();
+                    if (Array.isArray(list) && list.length > 0) {
+                        const exact = list.find(f => f.name === fnName || f.name.endsWith('.' + fnName) || fnName.endsWith('.' + f.name)) || list[0];
+                        if (exact && exact.offset) {
+                            resolvedOff = exact.offset;
+                            knownHookOffsets.set(fnName, resolvedOff);
+                        }
+                    }
+                } catch (_) {}
+            }
+            const offset = resolvedOff || "0x0 /* TODO: Enter offset from Symbols & Functions */";
+
+            let stackCode = "";
+            if (stackSlots.length) {
+                stackCode = "            // --- OBSERVED STACK & FRAME SLOTS (Captured Live) ---\n" + stackSlots.map(s => {
+                    const ptrBase = s.isFp ? "this.context.fp" : "(this.context.x15 || this.context.sp)";
+                    return `            const ${s.varName} = ${ptrBase}.add(${s.off}).readPointer(); // Observed: ${s.val.substring(0, 40)}`;
+                }).join("\n");
+            } else {
+                stackCode = "            // const dartSp = (this.context.x15 || this.context.sp);\n            // const sp_slot_10 = dartSp.add(0x10).readPointer();";
+            }
+
+            // Find sensitive string target: Check 1) Register Arguments (Model fields or direct strings), 2) Stack Slots
+            let tamperStringRecipe = "";
+            let foundArgTarget = null;
+
+            // Check if any register argument has a model field containing a string (e.g. Arg2 -> [+0x10: "password"])
+            for (let r of regArgs) {
+                const fieldMatch = r.val.match(/\+0x([0-9a-fA-F]+):\s*"([^"]+)"/);
+                if (fieldMatch) {
+                    foundArgTarget = {
+                        type: 'model_field',
+                        idx: r.idx,
+                        fieldOff: '0x' + fieldMatch[1],
+                        strSample: fieldMatch[2],
+                        fullSummary: r.val
+                    };
+                    break;
+                } else if (r.val.startsWith('"')) {
+                    foundArgTarget = {
+                        type: 'direct_arg',
+                        idx: r.idx,
+                        strSample: r.val.replace(/"/g, ''),
+                        fullSummary: r.val
+                    };
+                    break;
+                }
+            }
+
+            if (foundArgTarget && foundArgTarget.type === 'model_field') {
+                tamperStringRecipe = `
+            // [B] Model Instance Field Tampering (Arg${foundArgTarget.idx} -> field ${foundArgTarget.fieldOff} "${foundArgTarget.strSample}"):
+            try {
+                const targetObj = args[${foundArgTarget.idx}];
+                console.log("    Target Arg${foundArgTarget.idx} Object: " + targetObj);
+                if (targetObj && targetObj.and(1).toInt32() === 1) {
+                    const untagged = targetObj.sub(1);
+                    const heapBase = targetObj.and(ptr("0xffffffff00000000"));
+                    // Read 32-bit compressed pointer to string field at ${foundArgTarget.fieldOff}:
+                    const compOffset = untagged.add(${foundArgTarget.fieldOff}).readU32();
+                    const strObj = heapBase.add(compOffset);
+                    tamperDartString(strObj, "H@cK3D", heapBase);
+                } else {
+                    console.log("    [-] Arg${foundArgTarget.idx} is not a valid tagged Dart Object: " + targetObj);
+                }
+            } catch (err) {
+                console.log("    [-] Model field tamper error: " + err);
+            }`;
+            } else if (foundArgTarget && foundArgTarget.type === 'direct_arg') {
+                tamperStringRecipe = `
+            // [B] Direct Register Argument Tampering (Arg${foundArgTarget.idx}: "${foundArgTarget.strSample}"):
+            tamperDartString(args[${foundArgTarget.idx}], "H@cK3D");`;
+            } else {
+                const strSlot = stackSlots.find(s => s.val.includes('"'));
+                if (strSlot) {
+                    const ptrBase = strSlot.isFp ? "this.context.fp" : "(this.context.x15 || this.context.sp)";
+                    tamperStringRecipe = `
+            // [B] Dart Stack Slot Tampering (Observed: ${strSlot.val.substring(0, 30)}):
+            // Note: In ARM64 Dart AOT, x15 is Dart's Stack Pointer (SPREG)
+            const dartSp = (this.context.x15 || this.context.sp);
+            tamperDartString(${ptrBase}.add(${strSlot.off}).readPointer(), "H@cK3D");`;
+                } else {
+                    tamperStringRecipe = `
+            // [B] Tamper Argument / Stack:
+            // tamperDartString(args[1], "new_value");`;
+                }
+            }
+
+            return {
+                fnName: fnName,
+                offset: offset,
+                script: `/**
+ * deFlutter Dynamic Tampering Handler
+ * Target: ${fnName} (${offset})
+ * Base Module: libapp.so
+ */
+(function() {
+    const TARGET_OFFSET = ${offset};
+    const mod = Process.findModuleByName("libapp.so");
+    if (!mod) {
+        console.error("[-] libapp.so not loaded");
+        return;
+    }
+
+    const targetAddr = mod.base.add(TARGET_OFFSET);
+    console.log("[+] Intercepting ${fnName} @ " + targetAddr);
+
+    // --- GENERIC DART STRING TAMPERING HELPER ---
+    // Works across 64-bit Dart AOT (ARM64) with compressed pointers.
+    function tamperDartString(dartObjPtr, newStr, heapBase) {
+        try {
+            if (!dartObjPtr || dartObjPtr.isNull()) {
+                console.log("    [-] tamperDartString: Pointer is NULL");
+                return false;
+            }
+            let resolvedPtr = dartObjPtr;
+            // Decompress 32-bit compressed pointer if upper 32 bits are zero
+            if (resolvedPtr.and(ptr("0xffffffff00000000")).isNull() && heapBase) {
+                resolvedPtr = heapBase.add(resolvedPtr);
+            }
+            // Dart Heap Objects have bit 0 set (tagged pointer)
+            if (resolvedPtr.and(1).toInt32() !== 1) {
+                console.log("    [-] tamperDartString: Pointer " + resolvedPtr + " is not tagged (bit 0 != 1)");
+                return false;
+            }
+            const untagged = resolvedPtr.sub(1);
+
+            // Read original length from untagged + 4 (Smi: len << 1)
+            let origLen = untagged.add(4).readU32() >>> 1;
+            let textOffset = 12;
+
+            // Fallback for 64-bit uncompressed header alignment
+            if (origLen === 0 || origLen > 4096) {
+                const lenAt8 = untagged.add(8).readU32() >>> 1;
+                if (lenAt8 > 0 && lenAt8 <= 4096) {
+                    origLen = lenAt8;
+                    textOffset = 16;
+                }
+            }
+
+            if (origLen === 0) {
+                console.log("    [-] tamperDartString: Could not determine string length at +4 or +8");
+                return false;
+            }
+
+            // Safe bound: Cannot exceed original allocation without corrupting adjacent heap objects
+            const safeLen = Math.min(newStr.length, origLen);
+            const truncatedStr = newStr.substring(0, safeLen);
+
+            // 1. Update length Smi at +4 (or +8)
+            untagged.add(textOffset === 12 ? 4 : 8).writeU32((safeLen << 1) >>> 0);
+
+            // 2. Invalidate cached hash code at +8 (or +12)
+            untagged.add(textOffset === 12 ? 8 : 12).writeU32(0);
+
+            // 3. Write characters into payload at textOffset
+            const bytes = [];
+            for (let i = 0; i < safeLen; i++) {
+                bytes.push(truncatedStr.charCodeAt(i) & 0xff);
+            }
+            // Pad remaining old buffer with spaces to avoid lingering data
+            for (let i = safeLen; i < origLen; i++) {
+                bytes.push(0x20); // space
+            }
+            untagged.add(textOffset).writeByteArray(bytes);
+
+            console.log("    [★] Successfully tampered Dart String -> \\"" + truncatedStr + "\\" (capacity: " + origLen + ")");
+            return true;
+        } catch (e) {
+            console.log("    [-] tamperDartString error: " + e);
+            return false;
+        }
+    }
+
+    Interceptor.attach(targetAddr, {
+        onEnter: function(args) {
+            console.log("\\n[★] ⚡ HIT: ${fnName}");
+
+            // --- 1. REGISTER ARGUMENTS ---
+            // const arg0 = args[0]; // this/receiver
+            // const arg1 = args[1];
+
+${stackCode}
+
+            // ==========================================
+            // TAMPERING / MODIFICATION RECIPES:
+            // ==========================================
+            // [A] Tamper Smi Integer Argument (e.g. attemptCount, id):
+            // args[1] = ptr(42 << 1); // Dart Smi shift
+${tamperStringRecipe}
+        },
+
+        onLeave: function(retval) {
+            console.log("[✓] RETURN: ${fnName} -> " + retval);
+
+            // ==========================================
+            // RETURN VALUE TAMPERING / LOGIC BYPASS:
+            // ==========================================
+            // retval.replace(ptr(0x1)); // Force True / success
+        }
+    });
+})();
+`
+            };
+        }
+
+        async function generateHandlerFromLiveHit(fnName, explicitOffset) {
+            const data = await buildTailoredHandlerScript(fnName, explicitOffset);
+            navigator.clipboard.writeText(data.script).then(() => {
+                showToast(`⚡ Generated & copied tailored handler for ${fnName}!`);
+            });
+        }
+
+        let labCurrentFunction = null;
+        let labCurrentOffset = null;
+
+        async function openLiveHitInTraceLab(fnName, explicitOffset) {
+            const data = await buildTailoredHandlerScript(fnName, explicitOffset);
+            labCurrentFunction = data.fnName;
+            labCurrentOffset = data.offset;
+
+            const badge = document.getElementById('labTargetBadge');
+            if (badge) badge.textContent = `${data.fnName}`;
+
+            const offInfo = document.getElementById('labOffsetInfo');
+            if (offInfo) offInfo.textContent = `Offset: ${data.offset}`;
+
+            const editor = document.getElementById('labEditor');
+            if (editor) editor.value = data.script;
+
+            switchTab('tracelab');
+            showToast(`Loaded ${fnName} into Trace Lab!`);
+        }
+
+        function copyLabScript() {
+            const editor = document.getElementById('labEditor');
+            if (!editor || !editor.value.trim()) {
+                showToast("Editor is empty!");
+                return;
+            }
+            navigator.clipboard.writeText(editor.value).then(() => {
+                showToast("Script copied to clipboard!");
+            });
+        }
+
+        function downloadLabScript() {
+            const editor = document.getElementById('labEditor');
+            if (!editor || !editor.value.trim()) {
+                showToast("Editor is empty!");
+                return;
+            }
+            const cleanName = (labCurrentFunction || 'deflutter_handler').replace(/[^a-zA-Z0-9_]/g, '_');
+            const blob = new Blob([editor.value], { type: 'application/javascript;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${cleanName}.js`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(`Downloaded ${cleanName}.js`);
+        }
+
+        function insertLabSnippet(type) {
+            const editor = document.getElementById('labEditor');
+            if (!editor) return;
+
+            let snippet = '';
+            if (type === 'bypass_bool') {
+                snippet = '\n            // --- 1. OVERRIDE RETURN VALUE (onLeave) ---\n            // Force Boolean True (0x1) or custom return pointer on function exit\n            retval.replace(ptr(0x1));';
+            } else if (type === 'tamper_smi') {
+                snippet = '\n            // --- 2. TAMPER SMI INTEGER ARGUMENT (onEnter) ---\n            // Dart Smi integers are bit-shifted left by 1 (e.g. 42 << 1)\n            const customInt = 1337;\n            args[1] = ptr(customInt << 1); // Change args[1] to target arg index';
+            } else if (type === 'tamper_direct_str') {
+                snippet = '\n            // --- 3. TAMPER DIRECT STRING ARGUMENT (onEnter) ---\n            // Use when the function receives a Dart String directly in a register\n            const strArg = args[1]; // Change args[1] to target arg index (x1, x2, etc.)\n            tamperDartString(strArg, "NEW_VALUE");';
+            } else if (type === 'tamper_model') {
+                snippet = '\n            // --- 4. TAMPER INSTANCE FIELD (Class/Model Object Property) ---\n            // Use when an argument is a Class Instance (e.g. Password, User, Token)\n            // and you want to tamper one of its internal properties/member variables.\n            try {\n                const targetObj = args[2]; // Register Argument holding the Object Instance (x1, x2, etc.)\n                if (targetObj && targetObj.and(1).toInt32() === 1) {\n                    const untagged = targetObj.sub(1);\n                    const heapBase = targetObj.and(ptr("0xffffffff00000000"));\n                    const fieldOffset = 0x10; // Object Field Offset from live hit logs (+0xc, +0x10, etc.)\n                    const comp = untagged.add(fieldOffset).readU32(); // 32-bit compressed pointer\n                    tamperDartString(heapBase.add(comp), "H@CK3D", heapBase);\n                } else {\n                    console.log("[-] Target argument is not a tagged Dart object");\n                }\n            } catch (err) {\n                console.log("[-] Instance field tamper error: " + err);\n            }';
+            } else if (type === 'tamper_stack') {
+                snippet = '\n            // --- 5. TAMPER DART STACK SLOT (onEnter) ---\n            // Use when a string was captured from Dart Stack frames (x15 / sp)\n            const dartSp = (this.context.x15 || this.context.sp); // ARM64 Dart SP\n            const stackSlotOffset = 0x10; // Stack offset from live hit logs ([Stack+0x10])\n            tamperDartString(dartSp.add(stackSlotOffset).readPointer(), "H@CK3D");';
+            }
+
+            const text = editor.value;
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+
+            // If user placed cursor anywhere in the editor (not default 0)
+            if (start !== undefined && start !== null && start > 0) {
+                editor.value = text.substring(0, start) + snippet + text.substring(end);
+                const newPos = start + snippet.length;
+                editor.selectionStart = newPos;
+                editor.selectionEnd = newPos;
+                editor.focus();
+            } else {
+                // Smart fallback if cursor is unpositioned (at top of file)
+                let insertIdx = -1;
+                if (type === 'bypass_bool') {
+                    const onLeaveIdx = text.indexOf('onLeave: function(retval) {');
+                    if (onLeaveIdx !== -1) {
+                        const nlIdx = text.indexOf('\n', onLeaveIdx);
+                        insertIdx = nlIdx !== -1 ? nlIdx + 1 : onLeaveIdx;
+                    }
+                } else {
+                    const recipeMarker = text.indexOf('// TAMPERING / MODIFICATION RECIPES:');
+                    if (recipeMarker !== -1) {
+                        const nlIdx = text.indexOf('\n', recipeMarker);
+                        insertIdx = nlIdx !== -1 ? nlIdx + 1 : recipeMarker;
+                    } else {
+                        const onEnterIdx = text.indexOf('onEnter: function(args) {');
+                        if (onEnterIdx !== -1) {
+                            const nlIdx = text.indexOf('\n', onEnterIdx);
+                            insertIdx = nlIdx !== -1 ? nlIdx + 1 : onEnterIdx;
+                        }
+                    }
+                }
+
+                if (insertIdx !== -1) {
+                    editor.value = text.substring(0, insertIdx) + snippet + '\n' + text.substring(insertIdx);
+                    const newPos = insertIdx + snippet.length + 1;
+                    editor.selectionStart = newPos;
+                    editor.selectionEnd = newPos;
+                    editor.focus();
+                } else {
+                    // Fallback to inserting at cursor or end
+                    editor.value = text + snippet;
+                }
+            }
+
+            showToast(`Inserted recipe snippet at cursor!`);
+        }
+
+        function applyLabHook(engine = 'frida_spawn') {
+            const editor = document.getElementById('labEditor');
+            const script = editor ? editor.value.trim() : '';
+            if (!script) {
+                showToast("Please enter or load a script first!");
+                return;
+            }
+
+            const off = labCurrentOffset || '0x0';
+            const name = labCurrentFunction || 'TraceLabTarget';
+
+            fetch('/api/hooks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'add',
+                    offset: off,
+                    name: name,
+                    engine: engine,
+                    customScript: script
+                })
             })
             .then(r => r.json())
             .then(res => {

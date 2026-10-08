@@ -2,7 +2,7 @@
   <img src="docs/deflutter_logo.svg" width="160" alt="deFlutter Logo">
 </p>
 
-<h1 align="center">deFlutter ⚡</h1>
+<h1 align="center">deFlutter</h1>
 
 <p align="center">
   <strong>The Dual-Engine Dart AOT Runtime Dissector & Dynamic Tracer for Android</strong>
@@ -21,13 +21,11 @@
 
 Flutter Ahead-of-Time (AOT) compiles Dart applications into raw, stripped ARM64 machine code (`libapp.so`). There are no JVM method tables, standard symbols are completely stripped, and traditional dynamic instrumentation tools struggle against runtime ASLR, custom object pools, and Dart's non-standard register-based calling convention.
 
-As a homage to `reFlutter`, **deFlutter** pierces the opaque veil of compiled Flutter binaries with a state-of-the-art **dual-engine architecture**:
+**deFlutter** is a Flutter reverse-engineering tool that bridges static Dart AOT analysis with dynamic runtime analysis.
 
-1. **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device—**no Magisk module or reboot required!**
-2. **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via Magisk, KernelSU, or APatch for sub-millisecond native execution and live `.rodata` memory scanning.
-3. **Blutter Symbol Integration**: Direct import of exported Blutter analysis symbols (`dump.json`), automatically rebased against live memory at runtime.
-4. **Dart VM Snapshot Introspection**: Parses the runtime Dart AOT snapshot directly from memory, recovering SDK hashes, VM compiler flags, heap clusters, and thousands of internal package/library URIs.
-5. **Interactive Web Terminal & Host Bridge**: Sleek browser console (`http://localhost:8088`) with real-time WebSocket log streaming, live symbol search, one-click hooking, and 1-click `libapp.so` binary dumping.
+Building on the groundwork laid by [Blutter](https://github.com/worawit/blutter), which made Dart AOT decompilation and symbol reconstruction possible, **deFlutter** takes Blutter's static analysis output into the live runtime—enabling Dart function analysis, deep tracing, and experimental runtime tampering.
+
+The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/reFlutter), one of the early tools that helped shape Flutter reverse engineering and is still relevant.
 
 ---
 
@@ -35,28 +33,28 @@ As a homage to `reFlutter`, **deFlutter** pierces the opaque veil of compiled Fl
 
 ```
                           ┌─────────────────────────────────────────┐
-                          │          deFlutter Web Terminal         │
-                          │          http://localhost:8088          │
+                          │    deFlutter Web Companion Terminal     │
+                          │   (Live Trace & Tamper Lab @ :8088)     │
                           └────────────────────┬────────────────────┘
                                                │ WebSocket / REST
                                                ▼
 ┌─────────────────────────┐  ADB / REST  ┌─────────────────────────────────────────┐
-│  Host Bridge (Python)   │ ───────────► │       deFlutter Android Companion       │
+│  Host Bridge (Python)   │ ───────────► │      deFlutter Android Manager App      │
 │   - Docker / Blutter    │              │     (Jetpack Compose + Ktor Server)     │
-│   - Symbol Extractor    │              └────────────┬──────────────────┬─────────┘
-└─────────────────────────┘                           │                  │
-                                           Root ptrace│                  │Root IPC / Config
-                                                      ▼                  ▼
-                                        ┌───────────────────┐  ┌───────────────────┐
-                                        │  Frida Engine     │  │   Zygisk Module   │
-                                        │  (Standalone JS)  │  │   (Native Dobby)  │
-                                        └─────────┬─────────┘  └─────────┬─────────┘
-                                                  │                      │
-                                                  ▼                      ▼
-                                        ┌──────────────────────────────────────────┐
-                                        │        Target Flutter App Process        │
-                                        │        (arm64-v8a / x86_64 libapp.so)    │
-                                        └──────────────────────────────────────────┘
+│   - Symbol Extractor    │              └─────────┬───────────────────────────┬───┘
+└─────────────────────────┘                        │                           │
+                                        Root ptrace│                           │Root IPC / Config
+                                                   ▼                           ▼
+                                        ┌─────────────────────┐   ┌─────────────────────────┐
+                                        │    Frida Engine     │   │ deFlutter Zygisk Module │
+                                        │   (Standalone JS)   │   │     (Native Dobby)      │
+                                        └──────────┬──────────┘   └────────────┬────────────┘
+                                                   │                           │
+                                                   ▼                           ▼
+                                        ┌───────────────────────────────────────────────────┐
+                                        │            Target Flutter App Process             │
+                                        │          (arm64-v8a / x86_64 libapp.so)           │
+                                        └───────────────────────────────────────────────────┘
 ```
 
 ---
@@ -64,13 +62,13 @@ As a homage to `reFlutter`, **deFlutter** pierces the opaque veil of compiled Fl
 ## 🚀 Key Features
 
 * ⚡ **Dual Hooking Engines**:
-  * **Frida Mode**: Standalone dynamic instrumentation without flashing modules or rebooting. Features automatic 1-tap on-device Frida setup.
-  * **Dobby Mode**: In-process native inline hooking with Capstone disassembly and ASLR discovery.
-* 📦 **Deep VM Snapshot Analysis**: Dumps and visualizes Dart VM Snapshot details (Magic, Kind, SDK Hash, Features, Heap Objects, Base Objects, Isolate addresses, and discovered packages).
-* 🎯 **One-Click Function Interception**: Intercept any function offset or Blutter symbol directly from the mobile UI or Web Terminal.
+  * **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device—**no Magisk module or reboot required!**
+  * **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via the **deFlutter Zygisk module** (Magisk, KernelSU, or APatch) with Capstone disassembly, LR detours, live ASLR discovery, and live `.rodata` memory scanning (optional).
+* 🐳 **Automated Blutter Pipeline & Symbol Integration**: Pull target libraries (`libapp.so` & `libflutter.so`) via ADB, decompile with Blutter inside an isolated Docker container, extract semantic symbols (`symbols.json`), and automatically rebase and synchronize them with the deFlutter app and web companion.
+* 📦 **Dart VM Snapshot Introspection**: Parses the runtime Dart AOT snapshot directly from memory without symbols—recovering SDK hashes, VM compiler flags, heap clusters, and thousands of discovered package/library URIs.
+* 🎯 **One-Click Function Interception**: Intercept any function offset or Blutter symbol directly from the mobile UI or Web Companion.
 * 🧬 **Semantic Argument & CID Decoding**: Automatically decodes `String`, `int`, `Uint8List`, and Dart heap objects across registers (`X0`–`X7`) and stack slots.
-* 🌐 **Real-Time Web Terminal**: Stream clean or verbose live trace logs directly to your workstation browser over WebSockets (`adb forward tcp:8088 tcp:8088`).
-* 🐳 **Dockerized Blutter Pipeline**: Pull `libapp.so` via ADB, decompile with Blutter inside an isolated Docker container, and synchronize symbols with the device.
+* 🧪 **Web Companion Terminal & Trace/Tamper Lab (Experimental)**: Sleek browser console (`http://localhost:8088`) with real-time WebSocket log streaming, live symbol search, one-click hooking, and interactive in-place memory tampering with instant hot-reload.
 
 ---
 
@@ -88,35 +86,69 @@ As a homage to `reFlutter`, **deFlutter** pierces the opaque veil of compiled Fl
 
 ## 📦 Installation & Setup
 
-### 1. Install Companion Android App (Always Required)
-Install the manager APK on your device:
+Follow this recommended workflow for analyzing and instrumenting any target Flutter app:
+
+### Step 1: Install the deFlutter Android Manager App
+Install the manager APK on your rooted device:
 ```sh
 adb install -r deFlutter-v2.0.0-manager.apk
 ```
-
-### 2. Choose Your Tracing Engine
-
-#### Option A: Frida Engine (No Reboot Required)
-1. Open **deFlutter** on your device.
-2. In the **Config** tab under **Frida-Inject Engine**, tap **Install / Update Frida**.
-3. You are ready to trace!
-
-#### Option B: Zygisk Native Module (For Dobby Inline Hooks & Live Discovery)
-Flash the prebuilt module zip in Magisk / KernelSU / APatch and reboot:
-```sh
-adb push deFlutter-v2.0.0-zygisk.zip /data/local/tmp/
-adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-v2.0.0-zygisk.zip"
-```
+Launch **deFlutter** on the device and grant root permissions when prompted.
 
 ---
 
-## ⚡ Web Terminal & Desktop Inspector
+### Step 2: Choose & Configure Your Tracing Engine
 
-Forward the companion port to your workstation:
+#### Option A: Frida Engine (Recommended for Instant Setup — No Reboot Required)
+1. In the **deFlutter** app, navigate to the **Config** tab.
+2. Under **Frida Engine**, tap **Install Frida** to automatically download and configure `frida-inject` on-device.
+3. You are ready to trace and tamper immediately!
+
+#### Option B: deFlutter Zygisk Module (For Dobby Inline Hooks & Live Discovery)
+1. Flash the prebuilt module zip in Magisk, KernelSU, or APatch:
+   ```sh
+   adb push deFlutter-v2.0.0-zygisk.zip /data/local/tmp/
+   adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-v2.0.0-zygisk.zip"
+   ```
+2. **Reboot the device**.
+
+---
+
+### Step 3: Run the Host Companion Bridge (Automated Symbol Extraction & Sync)
+Connect your device via USB/ADB and run the host bridge on your PC to automatically pull the target app's APK, decompile it with Blutter in Docker, extract symbols, forward ports, and sync directly into deFlutter:
+
 ```sh
-adb forward tcp:8088 tcp:8088
+python scripts/host_bridge.py --pkg <target_package_name>
 ```
-Open **`http://localhost:8088`** in your browser to access the live trace terminal, symbol browser, and 1-click `libapp.so` extractor.
+
+> **Tip**: If you already have decompiled symbols, you can synchronize them directly:
+> ```sh
+> python scripts/host_bridge.py --symbols path/to/symbols.json --pkg <target_package_name>
+> ```
+
+> [!NOTE]
+> **Manual Workflow (Without Host Bridge)**:
+> If you prefer not to use the automated host bridge script:
+> 1. Pull target binaries (`libapp.so`, `libflutter.so`) via ADB: `adb shell pm path <pkg>` and `adb pull <path>`.
+> 2. Run Blutter decompilation manually to generate your symbol mapping (`symbols.json`).
+> 3. Push symbols to the device: `adb push symbols.json /data/local/tmp/deflutter/symbols.json` (or use the **Upload Symbols** button in the Web Companion / Manager App).
+> 4. Forward the companion port manually: `adb forward tcp:8088 tcp:8088`.
+
+---
+
+### Step 4: Open the Web Companion Terminal & Trace/Tamper Lab
+
+The bridge script automatically configures port forwarding. Open your workstation browser at:
+```
+http://localhost:8088
+```
+*(Or forward manually anytime via `adb forward tcp:8088 tcp:8088`)*
+
+From the Web Companion, you can:
+* **Live Terminal**: View live function hit logs with clean decoded semantic arguments.
+* **Symbols & Functions**: Search across thousands of symbols with server-side pagination and dispatch 1-click hooks.
+* **Trace/Tamper Lab**: Customize Frida handlers, test in-place Dart string modifications, and hot-reload hooks live.
+* **Dart VM Snapshot**: Inspect VM flags, isolate metadata, and discovered packages.
 
 ---
 
@@ -124,10 +156,10 @@ Open **`http://localhost:8088`** in your browser to access the live trace termin
 
 ```
 deFlutter/
-├── app/                  # Android Companion App (Jetpack Compose, Ktor Web Server)
+├── app/                  # Android Manager App (Jetpack Compose, Ktor Web Server)
 │   ├── src/main/assets/web/  # Web Terminal frontend (HTML/CSS/WebSocket)
 │   └── src/main/java/        # UI screens, SymbolManager, FridaInstaller, RootShell IPC
-├── module/               # Native Zygisk module (C++20)
+├── module/               # deFlutter Zygisk module (C++20)
 │   ├── src/main/cpp/
 │   │   ├── main.cpp          # Zygisk lifecycle & dlopen interception
 │   │   ├── scanner.cpp       # .rodata parser & Capstone disassembler

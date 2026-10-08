@@ -88,6 +88,10 @@ fun FridaStudioScreen(
     var traceReturnValue by remember { mutableStateOf(false) }
     var dobbyBasicTraceOnly by remember { mutableStateOf(false) }
 
+    // Frida Engine specific config (replicated for consistency)
+    var fridaBasicTraceOnly by remember { mutableStateOf(false) }
+    var fridaTraceReturn by remember { mutableStateOf(true) }
+
     // Bi-directional state sync with Web Terminal and global broadcaster
     LaunchedEffect(globalHookRunning, globalEngine) {
         if (globalHookRunning && globalEngine == "DOBBY") {
@@ -127,8 +131,10 @@ fun FridaStudioScreen(
 
     val effectiveTemplate = if (selectedFunction == null) {
         FridaSnippetGenerator.TemplateType.MULTI_FUNCTION_BATCH
+    } else if (fridaBasicTraceOnly) {
+        FridaSnippetGenerator.TemplateType.BASIC_TRACE
     } else {
-        selectedTemplate
+        FridaSnippetGenerator.TemplateType.DART_ARG_INSPECTOR
     }
 
     val effectiveBatchFuncs = remember(selectedFunction, batchFunctions, allFunctions) {
@@ -139,13 +145,14 @@ fun FridaStudioScreen(
         }
     }
 
-    val scriptCode = remember(effectiveTemplate, targetLib, selectedFunction, effectiveBatchFuncs, isVerbose) {
+    val scriptCode = remember(effectiveTemplate, targetLib, selectedFunction, effectiveBatchFuncs, isVerbose, fridaTraceReturn) {
         FridaSnippetGenerator.generateSnippet(
             templateType = effectiveTemplate,
             targetLib = targetLib.ifBlank { "libapp.so" },
             targetFunc = selectedFunction,
             allFuncs = effectiveBatchFuncs,
-            isVerbose = isVerbose
+            isVerbose = isVerbose,
+            traceReturn = fridaTraceReturn
         )
     }
 
@@ -730,177 +737,183 @@ fun FridaStudioScreen(
                     }
                 }
             } else {
-            if (selectedFunction == null) {
-                // Batch mode header banner
+                // Frida Engine Editor Screen (Matching Dobby Tracing Configuration)
                 Card(
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(containerColor = SlateSurfaceVariant),
-                    modifier = Modifier.fillMaxWidth().border(1.dp, PurpleHighlight.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = SlateSurface),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .border(1.dp, SlateBorder, RoundedCornerShape(12.dp))
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Bolt, contentDescription = null, tint = PurpleHighlight, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text("Batch Interceptor (${effectiveBatchFuncs.size} targets)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PurpleHighlight)
-                            Text("Simultaneously hooks all ${effectiveBatchFuncs.size} selected functions in libapp.so with offset tracking", fontSize = 10.sp, color = TextSecondary)
-                        }
-                    }
-                }
-            } else {
-                // Single Function: 2 tabs (Argument Inspector & Basic Tracer)
-                val singleTemplates = listOf(
-                    FridaSnippetGenerator.TemplateType.DART_ARG_INSPECTOR,
-                    FridaSnippetGenerator.TemplateType.BASIC_TRACE
-                )
-                val activeSingleIndex = singleTemplates.indexOf(
-                    if (selectedTemplate in singleTemplates) selectedTemplate else FridaSnippetGenerator.TemplateType.DART_ARG_INSPECTOR
-                ).coerceAtLeast(0)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CyanPrimary.copy(alpha = 0.18f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Bolt, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        "Frida Script Studio",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        "Dynamic JavaScript instrumentation & memory tampering",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.5.sp),
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
 
-                TabRow(
-                    selectedTabIndex = activeSingleIndex,
-                    containerColor = SlateSurfaceVariant,
-                    contentColor = CyanPrimary,
-                    divider = {}
-                ) {
-                    singleTemplates.forEach { template ->
-                        Tab(
-                            selected = selectedTemplate == template,
-                            onClick = { selectedTemplate = template },
-                            text = {
+                            HorizontalDivider(color = SlateBorder)
+
+                            // Target Info
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("TARGET FUNCTION", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = TextMuted)
+                                    Text(
+                                        selectedFunction?.name ?: (if (batchFunctions.isNotEmpty()) "Selected Batch (${batchFunctions.size} functions)" else "Batch Mode"),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                                        color = CyanPrimary,
+                                        maxLines = 1
+                                    )
+                                }
                                 Text(
-                                    text = template.title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selectedTemplate == template) FontWeight.Bold else FontWeight.Normal
+                                    "Offset: ${selectedFunction?.offset ?: "Batch"}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontFamily = FontFamily.Monospace),
+                                    color = TextSecondary
                                 )
                             }
-                        )
-                    }
-                }
 
-                Text(
-                    text = selectedTemplate.description,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
-                    color = TextSecondary
-                )
-            }
+                            HorizontalDivider(color = SlateBorder)
 
-            // Verbose Output Toggle for Frida
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SlateSurfaceVariant)
-                    .clickable { isVerbose = !isVerbose }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        if (isVerbose) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = null,
-                        tint = if (isVerbose) CyanPrimary else TextMuted,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text("Verbose Output", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (isVerbose) "Showing ASLR addresses (0x7a...), thread IDs & return pointers" else "Clean output: raw addresses, thread IDs & pointers hidden",
-                            fontSize = 9.sp,
-                            color = if (isVerbose) CyanPrimary else TextSecondary
-                        )
-                    }
-                }
-                Switch(
-                    checked = isVerbose,
-                    onCheckedChange = { isVerbose = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = CyanPrimary,
-                        checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
-                    )
-                )
-            }
+                            // TRACING CONFIGURATION (Consistent with Dobby)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("TRACING CONFIGURATION", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = TextMuted)
 
-            // Monospace Code Editor / Viewer Box
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CodeBackground)
-                    .border(1.dp, SlateBorder, RoundedCornerShape(12.dp))
-                    .padding(12.dp)
-            ) {
-                val vScroll = rememberScrollState()
-                val hScroll = rememberScrollState()
+                                // Toggle 1: Basic Call Tracing vs Dart Arg Inspector
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SlateSurfaceVariant)
+                                        .clickable { fridaBasicTraceOnly = !fridaBasicTraceOnly }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Timeline, contentDescription = null, tint = if (fridaBasicTraceOnly) CyanPrimary else TextMuted, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text("Basic Call Tracing", fontSize = 10.5.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                if (fridaBasicTraceOnly) "Active: logs calls & returns only (Arg Inspector OFF)" else "Disabled: full Dart Argument Inspector active",
+                                                fontSize = 8.5.sp,
+                                                color = if (fridaBasicTraceOnly) CyanPrimary else TextSecondary
+                                            )
+                                        }
+                                    }
+                                    Switch(
+                                        checked = fridaBasicTraceOnly,
+                                        onCheckedChange = { fridaBasicTraceOnly = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = CyanPrimary,
+                                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(vScroll)
-                        .horizontalScroll(hScroll)
-                ) {
-                    Text(
-                        text = scriptCode,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = CodeString,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
+                                // Toggle 2: Verbose Output Toggle
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SlateSurfaceVariant)
+                                        .clickable { isVerbose = !isVerbose }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (isVerbose) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = null,
+                                            tint = if (isVerbose) CyanPrimary else TextMuted,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text("Verbose Output", fontSize = 10.5.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                if (isVerbose) "Showing ASLR addresses (0x7a...), thread IDs & return pointers" else "Clean output: raw addresses, thread IDs & pointers hidden",
+                                                fontSize = 8.5.sp,
+                                                color = if (isVerbose) CyanPrimary else TextSecondary
+                                            )
+                                        }
+                                    }
+                                    Switch(
+                                        checked = isVerbose,
+                                        onCheckedChange = { isVerbose = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = CyanPrimary,
+                                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                }
 
-            // Copy & Share Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("Frida Script", scriptCode))
-                        Toast.makeText(context, "Script copied to clipboard!", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SlateSurfaceVariant),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("COPY SCRIPT", fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 11.sp)
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, scriptCode)
-                            type = "text/plain"
+                                // Toggle 3: Trace Returns (onLeave)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SlateSurfaceVariant)
+                                        .clickable { fridaTraceReturn = !fridaTraceReturn }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Reply, contentDescription = null, tint = CyanPrimary, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text("Trace Returns (onLeave)", fontSize = 10.5.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                if (fridaTraceReturn) "Active: captures function return value & latency" else "Disabled: onLeave handler omitted",
+                                                fontSize = 8.5.sp,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+                                    Switch(
+                                        checked = fridaTraceReturn,
+                                        onCheckedChange = { fridaTraceReturn = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = CyanPrimary,
+                                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                                        )
+                                    )
+                                }
+                            }
                         }
-                        val shareIntent = Intent.createChooser(sendIntent, "Share Frida Script")
-                        context.startActivity(shareIntent)
-                    },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("SHARE", fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 11.sp)
+                    }
                 }
-            }
-            }
         } else {
             // LIVE CONSOLE TAB
             val filteredLogs = remember(consoleLogs.size, isVerbose, dobbyBasicTraceOnly, selectedEngine) {
