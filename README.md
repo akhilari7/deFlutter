@@ -129,7 +129,7 @@ Installing the companion Zygisk module unlocks full **Dual-Engine Synergy**, com
 
 ---
 
-#### Alternative Option: Frida Standalone Mode (Fast Setup — No Reboot)
+#### Alternative Option: Frida Standalone Mode (Fast Setup - No Reboot)
 If you want to start analyzing immediately without flashing modules or rebooting your device:
 1. In the **deFlutter** app, navigate to the **Config** tab.
 2. Under **Frida Engine**, tap **Install Frida** to automatically download and configure `frida-inject` on-device.
@@ -196,7 +196,7 @@ Watch live Dart AOT function tracing and dynamic in-memory tampering in action:
 
 > 📺 *Click the preview above to watch the Live Function Tracing Demo (2:03 min)*
 
-### 2. Live Memory Tampering & CID Guarding
+### 2. Live Runtime Tampering with Argument Override
 <p align="center">
   <a href="https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6">
     <img src="docs/tamper_demo_preview.png" alt="Live Memory Tampering Demo" width="100%">
