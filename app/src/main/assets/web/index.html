@@ -742,17 +742,17 @@
                     <div>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 16px; font-weight: 700; color: var(--cyan);">🧪 Trace/Tamper Lab</span>
+                            <span class="badge" style="color: var(--cyan); border-color: rgba(6, 182, 212, 0.4); background: rgba(6, 182, 212, 0.1); font-size: 10px;">Frida Engine Exclusive</span>
                             <span class="badge" style="color: var(--amber); border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); font-size: 10px;">Experimental</span>
                             <span class="badge badge-purple" id="labTargetBadge">No function loaded</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                            Interactive in-browser Dart tracing & dynamic memory tampering studio. Edit, tamper, and execute live with instant hot-reload.
+                            Interactive in-browser Dart tracing & dynamic memory tampering studio (available exclusively via Frida Engine). Edit JavaScript hooks, tamper arguments/returns on the fly, and hot-reload live. For native C++ inline tracing without tampering, use Dobby from the Symbols & Functions tab.
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button class="btn" onclick="copyLabScript()" title="Copy script to clipboard">📋 Copy Script</button>
                         <button class="btn" onclick="downloadLabScript()" title="Download script as .js file">💾 Download .js</button>
-                        <button class="btn btn-purple" onclick="applyLabHook('dobby')" title="Hook natively via Dobby">⚡ Dobby</button>
                         <button class="btn" style="border-color: var(--cyan); color: var(--cyan);" onclick="applyLabHook('frida_spawn')" title="Cold start spawn with Frida">⚡ Frida (Spawn)</button>
                         <button class="btn" style="border-color: var(--emerald); color: var(--emerald);" onclick="applyLabHook('frida_attach')" title="Attach to running PID with Frida">⚡ Frida (Attach)</button>
                         <button class="btn btn-rose" onclick="stopHooks()" title="Stop and detach active hooks">⏹ Stop Hooks</button>
