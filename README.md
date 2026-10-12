@@ -185,14 +185,18 @@ From the Web Companion, you can:
 
 ## 🎬 Usage & Demo Walkthrough
 
-Watch the complete trace and dynamic tampering workflow in action:
+Watch an example of a dart function trace and dynamic tampering workflow in action:
 
-https://github.com/akhilari7/deFlutter/raw/main/docs/Usage_Demo_Trace_and_Tamper_1.5x.mp4
+Trace Demo
+https://github.com/user-attachments/assets/fa52bf23-6d60-4a4b-94e4-6901a79af753
+
+Tamper Demo
+https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6
 
 > [!TIP]
 > **GUI-Driven Workflow & Standalone Script Export**:
 > * **100% GUI-Based Operation**: Once deployed, deFlutter is completely GUI-driven. All real-time function tracing, decoded argument viewing, symbol searching, and live tampering can be executed seamlessly from the Web Companion (`http://localhost:8088`) without requiring manual terminal commands.
-> * **Trace & Tamper Lab Presets**: The Web Companion currently provides streamlined one-click presets to modify Dart String objects (direct arguments and nested instance fields), manipulate register Smi integers, bypass return values, and apply Class ID (`CID`) guards.
+> * **Trace & Tamper Lab Presets**: The Web Companion currently provides an experiment feature with basic presets to modify Dart String objects (direct arguments and nested instance fields), manipulate register Smi integers, bypass return values, and apply Class ID (`CID`) guards.
 > * **Extensible Beyond deFlutter**: You are not restricted to the Web Companion! Every time you configure or inspect a function, deFlutter automatically generates complete, standalone Frida scripts in the handler editor. You can copy these tailored scripts directly into your external Frida setup, CLI workflows, or custom tooling to extend your analysis outside of deFlutter.
 
 ---
