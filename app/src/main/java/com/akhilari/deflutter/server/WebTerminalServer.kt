@@ -147,7 +147,7 @@ object WebTerminalServer {
                             try {
                                 context.assets.open("web/index.html").bufferedReader().use { it.readText() }
                             } catch (_: Exception) {
-                                "<html><body><h3>FlutterInspect Web Terminal</h3><p>assets/web/index.html missing.</p></body></html>"
+                                "<html><body><h3>deFlutter Web Terminal</h3><p>assets/web/index.html missing.</p></body></html>"
                             }
                         }
                         call.respondText(html, ContentType.Text.Html)
@@ -965,7 +965,7 @@ object WebTerminalServer {
             server.start(wait = false)
             engine = server
             _isRunning.value = true
-            TraceLogBroadcaster.postLog("[★] FlutterInspect Web Terminal server started on port $PORT (http://0.0.0.0:$PORT)")
+            TraceLogBroadcaster.postLog("[★] deFlutter Web Terminal server started on port $PORT (http://0.0.0.0:$PORT)")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("WebTerminalServer", "Failed to start WebTerminalServer: ${e.message}", e)
