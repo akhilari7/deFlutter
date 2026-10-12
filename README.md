@@ -185,13 +185,13 @@ From the Web Companion, you can:
 
 ## 🎬 Usage & Demo Walkthrough
 
-Watch an example of a dart function trace and dynamic tampering workflow in action:
+Watch live Dart AOT function tracing and dynamic in-memory tampering in action:
 
-Trace Demo
-https://github.com/user-attachments/assets/fa52bf23-6d60-4a4b-94e4-6901a79af753
+### 1. Live Function Tracing & Semantic Argument Decoding
+<video src="https://github.com/user-attachments/assets/fa52bf23-6d60-4a4b-94e4-6901a79af753" controls="controls" width="100%"></video>
 
-Tamper Demo
-https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6
+### 2. Live Memory Tampering & CID Guarding
+<video src="https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6" controls="controls" width="100%"></video>
 
 > [!TIP]
 > **GUI-Driven Workflow & Standalone Script Export**:
