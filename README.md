@@ -188,10 +188,22 @@ From the Web Companion, you can:
 Watch live Dart AOT function tracing and dynamic in-memory tampering in action:
 
 ### 1. Live Function Tracing & Semantic Argument Decoding
-<video src="https://github.com/user-attachments/assets/fa52bf23-6d60-4a4b-94e4-6901a79af753" controls="controls" width="100%"></video>
+<p align="center">
+  <a href="https://github.com/user-attachments/assets/fa52bf23-6d60-4a4b-94e4-6901a79af753">
+    <img src="docs/trace_demo_preview.png" alt="Live Function Tracing Demo" width="100%">
+  </a>
+</p>
+
+> 📺 *Click the preview above to watch the Live Function Tracing Demo (2:03 min)*
 
 ### 2. Live Memory Tampering & CID Guarding
-<video src="https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6" controls="controls" width="100%"></video>
+<p align="center">
+  <a href="https://github.com/user-attachments/assets/fa903a44-01db-4a78-bd62-0cdb2e27edf6">
+    <img src="docs/tamper_demo_preview.png" alt="Live Memory Tampering Demo" width="100%">
+  </a>
+</p>
+
+> 📺 *Click the preview above to watch the Live Memory Tampering Demo (1:11 min)*
 
 > [!TIP]
 > **GUI-Driven Workflow & Standalone Script Export**:
