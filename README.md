@@ -65,7 +65,7 @@ The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/
   * **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device, **no Magisk module or reboot required!**
   * **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via the **deFlutter Zygisk module** (Magisk, KernelSU, or APatch) with Capstone disassembly, LR detours, live ASLR discovery, and live `.rodata` memory scanning (optional).
 * 🐳 **Automated Blutter Pipeline & Symbol Integration**: Pull target libraries (`libapp.so` & `libflutter.so`) via ADB, decompile with Blutter inside an isolated Docker container, extract semantic symbols (`symbols.json`), and automatically rebase and synchronize them with the deFlutter app and web companion.
-* 📦 **Dart VM Snapshot Introspection**: Parses the runtime Dart AOT snapshot directly from memory without symbols—recovering SDK hashes, VM compiler flags, heap clusters, and thousands of discovered package/library URIs.
+* 📦 **Dart VM Snapshot Introspection** *(Requires Zygisk Module)*: Parses the runtime Dart AOT snapshot directly from memory at startup without symbols—recovering SDK hashes, VM compiler flags, heap clusters, and thousands of discovered package/library URIs.
 * 🎯 **One-Click Function Interception**: Intercept any function offset or Blutter symbol directly from the mobile UI or Web Companion.
 * 🧬 **Semantic Argument & CID Decoding**: Automatically decodes `String`, `int`, `Uint8List`, and Dart heap objects across registers (`X0`–`X7`) and stack slots.
 * 🧪 **Web Companion Terminal & Trace/Tamper Lab (Experimental)**: Sleek browser console (`http://localhost:8088`) with real-time WebSocket log streaming, live symbol search, one-click hooking, and interactive in-place memory tampering with instant hot-reload.
@@ -76,8 +76,8 @@ The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/
 
 * **Android Device**: Rooted Android 10–15 (`arm64-v8a` or `x86_64`).
 * **Root Access**: 
-  * *For Frida Mode*: Standard root access (`su`).
-  * *For Dobby Mode*: Magisk (with Zygisk), KernelSU (with Zygisk Next), or APatch.
+  * *For Frida Mode (Live Tracing & Tampering)*: Standard root access (`su`). No Magisk module or reboot required.
+  * *For Zygisk Mode (Dobby Hooks & Dart VM Snapshot)*: Magisk (with Zygisk), KernelSU (with Zygisk Next), or APatch.
 * **Workstation**:
   * Python 3.8+ (for host bridge scripts).
   * Docker Desktop (optional, for automated Blutter decompilation).
@@ -91,26 +91,53 @@ Follow this recommended workflow for analyzing and instrumenting any target Flut
 ### Step 1: Install the deFlutter Android Manager App
 Install the manager APK on your rooted device:
 ```sh
-adb install -r deFlutter-v2.0.0-manager.apk
+adb install -r deFlutter-<version>-manager.apk
 ```
+> *Note: Download the latest APK asset from [Releases](https://github.com/akhilari7/deFlutter/releases) and specify the exact filename corresponding to the version you downloaded (e.g. `deFlutter-v2.0.0-manager.apk`).*
+
 Launch **deFlutter** on the device and grant root permissions when prompted.
 
 ---
 
-### Step 2: Choose & Configure Your Tracing Engine
+### Step 2: Choose & Configure Your Engine
 
-#### Option A: Frida Engine (Recommended for Instant Setup — No Reboot Required)
+deFlutter supports two deployment workflows depending on your analysis requirements:
+
+| Capability | Dual-Engine Mode *(Recommended)*<br>*(Zygisk Module + Frida)* | Frida Standalone Mode<br>*(Faster Setup)* |
+| :--- | :---: | :---: |
+| **Setup Overhead** | Flash ZIP & Reboot (Magisk / KSU / APatch) | 1-Tap in App (No Reboot Required) |
+| **Dart VM Snapshot & Package Discovery** | ✅ Full in-memory heap walk & SDK hash | ❌ Not Available *(Requires Zygisk)* |
+| **Dobby Native Inline Hooking** | ✅ Early zygote-level injection | ❌ Not Available *(Requires Zygisk)* |
+| **Live Function Tracing & Arg Decoding** | ✅ Supported (Dual-Engine / Frida) | ✅ Supported (Frida Engine) |
+| **Interactive Tamper Lab & Hot Reload** | ✅ Supported (Frida Engine) | ✅ Supported (Frida Engine) |
+
+---
+
+#### Primary Method: Dual-Engine Setup via Zygisk Module (Recommended)
+Installing the companion Zygisk module unlocks full **Dual-Engine Synergy**, combining low-level C++ zygote hooks with Frida runtime scripting:
+* **Dart VM Snapshot Introspection**: Walks the in-memory Dart VM isolate heap during early zygote initialization to retrieve `kFullAOT` snapshot headers, verify SDK commit hashes, and discover all registered `package:` URIs.
+* **Dobby Native Inline Hooking**: Intercepts native functions at zygote startup before application runtime code begins executing.
+* **Frida Tracing & Tamper Lab**: Once the Zygisk module is installed, you can also leverage Frida via the Manager App's Config tab for hot-reloading hooks and in-memory tampering.
+
+1. Flash the prebuilt module zip in Magisk, KernelSU, or APatch:
+   ```sh
+   adb push deFlutter-<version>-zygisk.zip /data/local/tmp/
+   adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-<version>-zygisk.zip"
+   ```
+   > *Note: Download the latest module ZIP from [Releases](https://github.com/akhilari7/deFlutter/releases) and substitute `<version>` with your downloaded version (e.g. `deFlutter-v2.0.0-zygisk.zip`).*
+2. **Reboot the device**.
+
+---
+
+#### Alternative Option: Frida Standalone Mode (Fast Setup — No Reboot)
+If you want to start analyzing immediately without flashing modules or rebooting your device:
 1. In the **deFlutter** app, navigate to the **Config** tab.
 2. Under **Frida Engine**, tap **Install Frida** to automatically download and configure `frida-inject` on-device.
 3. You are ready to trace and tamper immediately!
 
-#### Option B: deFlutter Zygisk Module (For Dobby Inline Hooks & Live Discovery)
-1. Flash the prebuilt module zip in Magisk, KernelSU, or APatch:
-   ```sh
-   adb push deFlutter-v2.0.0-zygisk.zip /data/local/tmp/
-   adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-v2.0.0-zygisk.zip"
-   ```
-2. **Reboot the device**.
+> [!WARNING]
+> **Trade-off in Frida Standalone Mode**:
+> In standalone mode, live function tracing, decoded argument logging, and the interactive Trace/Tamper Lab work completely out of the box. However, low-level **Dart VM Snapshot Introspection** is not available without early zygote injection. The **Dart VM Snapshot** tab in both the Manager App and Web UI will display an amber notice indicating that the Zygisk module is required for snapshot walking.
 
 ---
 
@@ -120,6 +147,10 @@ Connect your device via USB/ADB and run the host bridge on your PC to automatica
 ```sh
 python scripts/host_bridge.py --pkg <target_package_name>
 ```
+
+> [!NOTE]
+> **Works in Both Modes**:
+> The host bridge script extracts `libapp.so` and `libflutter.so` directly from the installed APK via ADB, completely independent of the Zygisk module. Even in Frida-only standalone mode, running the bridge will populate all symbols, class hierarchies, and function offsets for tracing.
 
 > **Tip**: If you already have decompiled symbols, you can synchronize them directly:
 > ```sh
@@ -156,24 +187,35 @@ From the Web Companion, you can:
 
 ```
 deFlutter/
-├── app/                  # Android Manager App (Jetpack Compose, Ktor Web Server)
-│   ├── src/main/assets/web/  # Web Terminal frontend (HTML/CSS/WebSocket)
-│   └── src/main/java/        # UI screens, SymbolManager, FridaInstaller, RootShell IPC
-├── module/               # deFlutter Zygisk module (C++20)
+├── app/                      # Android Manager App (Jetpack Compose, Ktor Embedded Server)
+│   ├── src/main/assets/
+│   │   ├── web/              # Web Companion frontend (HTML5/CSS3/WebSocket SPA)
+│   │   └── scripts/          # Bundled workstation scripts (blutter2symbols.py)
+│   └── src/main/java/com/akhilari/deflutter/
+│       ├── data/             # Models, RootShell IPC, SymbolManager, FridaInstaller
+│       ├── server/           # Ktor embedded server (REST API & Trace Log Broadcaster)
+│       └── ui/               # Jetpack Compose UI (screens, components, themes)
+├── module/                   # deFlutter Zygisk module (C++20 & Dobby Hook)
 │   ├── src/main/cpp/
-│   │   ├── main.cpp          # Zygisk lifecycle & dlopen interception
-│   │   ├── scanner.cpp       # .rodata parser & Capstone disassembler
-│   │   ├── snapshot.cpp      # Dart VM AOT snapshot deserializer
-│   │   └── dobby_hook.cpp    # Dobby inline hooking & Dart ABI tracer
-│   └── template/             # Magisk module packaging files
-├── scripts/              # Workstation automation toolkit
+│   │   ├── main.cpp          # Zygisk lifecycle entry point & dlopen interception
+│   │   ├── dart_tracer.cpp   # Dobby inline hooking, ABI argument decoding & call tracing
+│   │   ├── snapshot_walker.cpp # Dart VM AOT isolate snapshot cluster walker & metadata parser
+│   │   ├── rodata_scan.cpp   # .rodata string scanner & Capstone disassembly xrefs
+│   │   ├── dart_resolver.cpp # Semantic Dart type and CID resolution
+│   │   └── result_writer.cpp # In-memory enumeration & snapshot JSON serializer
+│   └── template/             # Magisk module packaging template (module.prop, customize.sh)
+├── bridge/                   # Dockerized Blutter decompilation engine
+│   ├── Dockerfile            # Container image definition (Ubuntu + Clang + Blutter)
+│   ├── entrypoint.py         # Container entrypoint runner
+│   └── blutter2symbols.py    # Blutter ASM symbol extractor & JSON serializer
+├── scripts/                  # Workstation companion automation toolkit
 │   ├── host_bridge.py        # Automated ADB pull, Docker runner, & symbol sync
 │   └── blutter2symbols.py    # Standalone Blutter ASM to symbols converter
-├── docs/                 # Documentation, specifications, and SVG vector logos
-├── dist/                 # Release packages & module zips
-├── gradle/               # Gradle wrapper and build tooling
-├── LICENSE               # Apache License 2.0
-└── README.md             # Project documentation
+├── docs/                     # Documentation, specifications, and SVG vector logos
+├── dist/                     # Release packages & flashable module zips
+├── gradle/                   # Gradle wrapper and build tooling
+├── LICENSE                   # Apache License 2.0
+└── README.md                 # Project documentation
 ```
 
 ---

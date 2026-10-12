@@ -90,6 +90,22 @@ object RootShell {
         ok
     }
 
+    suspend fun getZygiskModuleState(): String = withContext(Dispatchers.IO) {
+        val checkDir = execSu("test -d /data/adb/modules/deflutter || test -d /data/adb/modules/flutterlens")
+        if (checkDir.exitCode != 0) {
+            return@withContext "NOT_INSTALLED"
+        }
+        val checkDisabled = execSu("test -f /data/adb/modules/deflutter/disable || test -f /data/adb/modules/flutterlens/disable")
+        if (checkDisabled.exitCode == 0) {
+            return@withContext "DISABLED"
+        }
+        "ACTIVE"
+    }
+
+    suspend fun isZygiskModuleInstalled(): Boolean = withContext(Dispatchers.IO) {
+        getZygiskModuleState() == "ACTIVE"
+    }
+
     suspend fun saveConfig(config: InspectConfig): Result<String> = withContext(Dispatchers.IO) {
         try {
             execSu("setenforce 0")

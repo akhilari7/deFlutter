@@ -2497,6 +2497,27 @@ ${tamperStringRecipe}
                 });
         }
 
+        function restartTargetApp(pkg) {
+            const target = pkg || activeTarget;
+            if (!target) return;
+            showToast(`Restarting ${target}...`);
+            fetch('/api/restart-target', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ package: target })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    showToast(`Restarted ${target}! Refreshing snapshot in 3s...`);
+                    setTimeout(() => loadSnapshot(target), 3000);
+                } else {
+                    showToast(`Failed: ${res.error || 'Could not restart'}`, 'error');
+                }
+            })
+            .catch(e => showToast(`Error: ${e}`, 'error'));
+        }
+
         function renderSnapshot(data) {
             const targetBadge = document.getElementById('snapTargetBadge');
             if (targetBadge) {
@@ -2507,7 +2528,13 @@ ${tamperStringRecipe}
             if (libBaseEl) libBaseEl.textContent = data.libappBase || '--';
 
             if (!data.valid) {
-                document.getElementById('snapKindBadge').textContent = 'Unknown';
+                const isActiveModule = (data.module_state === 'ACTIVE');
+                const kindBadge = document.getElementById('snapKindBadge');
+                if (kindBadge) {
+                    kindBadge.textContent = isActiveModule ? 'Pending Startup' : 'Zygisk Required';
+                    kindBadge.style.borderColor = isActiveModule ? 'var(--cyan)' : 'var(--amber)';
+                    kindBadge.style.color = isActiveModule ? 'var(--cyan)' : 'var(--amber)';
+                }
                 document.getElementById('snapMagicBadge').textContent = '--';
                 document.getElementById('snapSdkHash').textContent = '--';
                 document.getElementById('snapFeatures').innerHTML = '<span class="dep-pill">N/A</span>';
@@ -2518,13 +2545,37 @@ ${tamperStringRecipe}
                 document.getElementById('snapIsolateData').textContent = '--';
                 document.getElementById('snapIsolateInstr').textContent = '--';
                 document.getElementById('snapPackagesCount').textContent = '0 Packages';
-                document.getElementById('snapPackagesList').innerHTML = `
-                    <div style="color: var(--text-muted); padding: 32px; text-align: center; grid-column: 1 / -1;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">🔍</div>
-                        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">No Snapshot Found for ${escapeHtml(data.package || 'active target')}</div>
-                        <div style="font-size: 12px; max-width: 500px; margin: 0 auto 16px;">${escapeHtml(data.message || 'Run a discovery scan or restart target app to dump live Dart snapshot metadata.')}</div>
-                    </div>
-                `;
+
+                if (isActiveModule) {
+                    document.getElementById('snapPackagesList').innerHTML = `
+                        <div style="background: rgba(34, 211, 238, 0.05); border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 12px; padding: 32px 24px; text-align: center; grid-column: 1 / -1;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">⚡</div>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Target Flutter App Startup Required</div>
+                            <div style="font-size: 12px; color: var(--text-muted); max-width: 580px; margin: 0 auto 16px; line-height: 1.6;">
+                                The <strong>deFlutter Zygisk module</strong> is detected on this device, but snapshot metadata for <code>${escapeHtml(data.package || activeTarget || 'target')}</code> has not been captured yet. Launch or restart the target Flutter app so the module can hook into early zygote initialization.
+                            </div>
+                            <button class="btn btn-cyan" onclick="restartTargetApp('${escapeHtml(data.package || activeTarget)}')" style="font-size: 12px; padding: 8px 18px;">
+                                🚀 Restart Target App
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('snapPackagesList').innerHTML = `
+                        <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 32px 24px; text-align: center; grid-column: 1 / -1;">
+                            <div style="font-size: 28px; margin-bottom: 10px;">⚠️</div>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--amber); margin-bottom: 8px;">Zygisk Module Required for Snapshot Introspection</div>
+                            <div style="font-size: 12px; color: var(--text-muted); max-width: 600px; margin: 0 auto 14px; line-height: 1.6;">
+                                Low-level Dart VM isolate heap walking occurs in-process during zygote initialization. When running in <strong>Frida Standalone Mode</strong>, live function tracing and the Tamper Lab are fully active, but in-memory VM Snapshot metadata is unavailable.
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-secondary); background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 12px; max-width: 560px; margin: 0 auto; font-family: monospace;">
+                                adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-&lt;version&gt;-zygisk.zip"
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                                Flash the module ZIP in Magisk / KernelSU / APatch and reboot the device to enable full snapshot introspection.
+                            </div>
+                        </div>
+                    `;
+                }
                 allSnapshotPackages = [];
                 return;
             }

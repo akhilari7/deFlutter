@@ -1,4 +1,4 @@
-﻿package com.akhilari.deflutter.ui.screens
+package com.akhilari.deflutter.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -92,6 +92,9 @@ fun ConfigScreen(
                     withContext(Dispatchers.Main) {
                         if (res.isSuccess) {
                             val (fCount, cCount) = res.getOrThrow()
+                            if (config.process.isNotBlank()) {
+                                SymbolManager.setLoadedPackage(config.process)
+                            }
                             Toast.makeText(context, "Loaded $fCount functions & $cCount classes!", Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "Failed to load symbols: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()

@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +23,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import com.akhilari.deflutter.data.models.DartSnapshot
 import com.akhilari.deflutter.data.models.FunctionEntry
 import com.akhilari.deflutter.data.models.ScanResult
@@ -41,6 +48,43 @@ fun ResultsScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val symbolPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val stream = context.contentResolver.openInputStream(uri)
+                    val res = if (stream != null) {
+                        stream.buffered(65536).use { SymbolManager.loadFromStream(it) }
+                    } else {
+                        Result.failure(Exception("Could not open file stream"))
+                    }
+                    withContext(Dispatchers.Main) {
+                        if (res.isSuccess) {
+                            val (fCount, cCount) = res.getOrThrow()
+                            val activeTargetPkg = scanResult?.process?.ifBlank {
+                                com.akhilari.deflutter.server.TraceLogBroadcaster.activeTarget.value
+                            } ?: com.akhilari.deflutter.server.TraceLogBroadcaster.activeTarget.value
+                            if (activeTargetPkg.isNotBlank()) {
+                                SymbolManager.setLoadedPackage(activeTargetPkg)
+                            }
+                            Toast.makeText(context, "Loaded $fCount functions & $cCount classes!", Toast.LENGTH_SHORT).show()
+                            onReload()
+                        } else {
+                            Toast.makeText(context, "Failed to load symbols: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Error reading file: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
 
     val isSymbolsLoaded by SymbolManager.isLoaded.collectAsState()
     val loadedPkg by SymbolManager.loadedPackage.collectAsState()
@@ -181,6 +225,13 @@ fun ResultsScreen(
         val managedSnap by SymbolManager.activeSnapshot.collectAsState()
         val snap = scanResult?.snapshot ?: managedSnap
         var showSymbolsDialog by remember { mutableStateOf(false) }
+
+        var zygiskModuleState by remember { mutableStateOf("CHECKING") }
+        LaunchedEffect(activePkg, snap?.valid) {
+            if (snap == null || !snap.valid) {
+                zygiskModuleState = com.akhilari.deflutter.data.shell.RootShell.getZygiskModuleState()
+            }
+        }
 
         if (snap != null && snap.valid) {
             Spacer(modifier = Modifier.height(10.dp))
@@ -492,9 +543,124 @@ fun ResultsScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
             }
+        } else {
+            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = SlateSurface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        if (zygiskModuleState == "ACTIVE") CyanPrimary.copy(alpha = 0.35f) else AmberWarning.copy(alpha = 0.35f),
+                        RoundedCornerShape(12.dp)
+                    )
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (zygiskModuleState == "ACTIVE") Icons.Default.Info else Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = if (zygiskModuleState == "ACTIVE") CyanPrimary else AmberWarning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (zygiskModuleState == "ACTIVE") {
+                                    "Dart VM Snapshot (App Launch Required)"
+                                } else {
+                                    "Dart VM Snapshot (Zygisk Required)"
+                                },
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                ),
+                                color = TextPrimary
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (zygiskModuleState == "ACTIVE") CyanPrimary.copy(alpha = 0.12f)
+                                    else AmberWarning.copy(alpha = 0.12f)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (zygiskModuleState == "ACTIVE") CyanPrimary.copy(alpha = 0.3f)
+                                    else AmberWarning.copy(alpha = 0.3f),
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = when (zygiskModuleState) {
+                                    "ACTIVE" -> "Module Active"
+                                    "DISABLED" -> "Module Disabled"
+                                    else -> "Frida Standalone"
+                                },
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = if (zygiskModuleState == "ACTIVE") CyanPrimary else AmberWarning
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (zygiskModuleState == "ACTIVE") {
+                            "The deFlutter Zygisk module is active on this device, but snapshot metadata for '${activePkg.ifBlank { "target" }}' has not been captured yet. Launch or restart the target Flutter app so the module can hook its startup."
+                        } else {
+                            "Dart VM isolate heap walking occurs during early zygote initialization. When running in Frida standalone mode, live function tracing and the Tamper Lab are fully active, but in-memory VM Snapshot metadata is unavailable."
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = TextMuted
+                    )
+
+                    if (zygiskModuleState == "ACTIVE" && activePkg.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        Toast.makeText(context, "Saving config and restarting $activePkg...", Toast.LENGTH_SHORT).show()
+                                        val currentCfg = com.akhilari.deflutter.data.shell.RootShell.loadCurrentConfig()
+                                            ?: com.akhilari.deflutter.data.models.InspectConfig()
+                                        val updatedCfg = currentCfg.copy(process = activePkg)
+                                        com.akhilari.deflutter.data.shell.RootShell.saveConfig(updatedCfg)
+                                        com.akhilari.deflutter.server.TraceLogBroadcaster.updateTarget(activePkg)
+                                        val res = com.akhilari.deflutter.data.shell.RootShell.restartTargetApp(activePkg)
+                                        if (res.isSuccess) {
+                                            kotlinx.coroutines.delay(2500)
+                                            onReload()
+                                        } else {
+                                            Toast.makeText(context, "Restart failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanPrimary),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Restart $activePkg", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        if (isSymbolsLoaded && isDiscoveryEnabled && allFunctions.isNotEmpty()) {
+        if (isSymbolsForActivePkg && isDiscoveryEnabled && allFunctions.isNotEmpty()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -526,7 +692,7 @@ fun ResultsScreen(
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-        } else if (isSymbolsLoaded) {
+        } else if (isSymbolsForActivePkg) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -553,8 +719,9 @@ fun ResultsScreen(
                 onValueChange = { searchQuery = it },
                 placeholder = {
                     Text(
-                        if (searchBlutterMode) "Search symbols (e.g. encrypt, SecurityService)..."
-                        else "Filter functions or offsets...",
+                        if (effectiveBlutterMode) "Search symbols (e.g. encrypt, SecurityService)..."
+                        else if (allFunctions.isNotEmpty()) "Filter functions or offsets..."
+                        else "Search functions or symbols...",
                         color = TextMuted,
                         fontSize = 12.sp
                     )
@@ -699,45 +866,92 @@ fun ResultsScreen(
                 }
             }
         } else if (filteredFunctions.isEmpty()) {
+            val totalAvailable = if (effectiveBlutterMode) SymbolManager.functionsCount else allFunctions.size
+            val isSearching = searchQuery.isNotBlank()
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = if (isSearching && totalAvailable > 0) Icons.Default.SearchOff else Icons.Default.Info,
                         contentDescription = null,
                         tint = TextMuted,
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = if (allFunctions.isEmpty()) "No Discovered Functions Yet" else "No Matching Functions Found",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = if (isSearching && totalAvailable > 0) "No Matching Functions Found" else "No Functions Found",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = if (searchBlutterMode)
+                        text = if (isSearching && totalAvailable > 0) {
+                            "No functions match '$searchQuery'. Try a different search query."
+                        } else if (!isSymbolsForActivePkg && allFunctions.isEmpty()) {
+                            "No functions found. Make sure symbols.json is loaded for the active target, or run the target app with live discovery enabled."
+                        } else if (effectiveBlutterMode && SymbolManager.functionsCount > 0) {
                             "Type a class or method name in the search box above to find symbols."
-                        else if (allFunctions.isEmpty())
-                            "Ensure the target app has run once with live discovery enabled, or use Blutter symbols."
-                        else "Try a different search query.",
+                        } else {
+                            "Ensure the target app has run once with live discovery enabled, or load Blutter symbols."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = onReload,
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
-                        shape = RoundedCornerShape(8.dp)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, tint = SlateBackground)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("RELOAD RESULTS", fontWeight = FontWeight.Bold, color = SlateBackground)
+                        if (isSearching && totalAvailable > 0) {
+                            Button(
+                                onClick = { searchQuery = "" },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = null, tint = SlateBackground)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("CLEAR SEARCH", fontWeight = FontWeight.Bold, color = SlateBackground)
+                            }
+                        } else {
+                            if (!isSymbolsForActivePkg) {
+                                Button(
+                                    onClick = { symbolPickerLauncher.launch("*/*") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.FileOpen, contentDescription = null, tint = SlateBackground)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("LOAD SYMBOLS.JSON", fontWeight = FontWeight.Bold, color = SlateBackground)
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = onReload,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanPrimary),
+                                border = BorderStroke(1.dp, if (!isSymbolsForActivePkg) SlateBorder else CyanPrimary.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = CyanPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "RELOAD RESULTS",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = CyanPrimary
+                                )
+                            }
+                        }
                     }
                 }
             }

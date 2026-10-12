@@ -240,16 +240,16 @@ object WebTerminalServer {
                                 ?: call.request.headers["X-Package-Name"]
                                 ?: TraceLogBroadcaster.activeTarget.value
 
-                            var snap = SymbolManager.activeSnapshot.value
-                            if (snap == null || !snap.valid || (pkg.isNotBlank() && SymbolManager.loadedPackage.value != pkg)) {
+                            var snap = if (pkg.isNotBlank() && SymbolManager.loadedPackage.value != pkg) {
                                 val scanRes = RootShell.loadScanResult(pkg).getOrNull()
-                                if (scanRes?.snapshot != null && scanRes.snapshot.valid) {
-                                    snap = scanRes.snapshot
-                                    SymbolManager.setActiveSnapshot(snap)
-                                }
+                                scanRes?.snapshot
+                            } else {
+                                SymbolManager.activeSnapshot.value ?: RootShell.loadScanResult(pkg).getOrNull()?.snapshot
                             }
 
                             val root = JSONObject()
+                            val moduleState = RootShell.getZygiskModuleState()
+                            root.put("module_state", moduleState)
                             if (snap != null && snap.valid) {
                                 root.put("valid", true)
                                 root.put("package", pkg)
@@ -268,7 +268,12 @@ object WebTerminalServer {
                             } else {
                                 root.put("valid", false)
                                 root.put("package", pkg)
-                                root.put("message", "No snapshot metadata found for '$pkg'. Run a discovery scan or restart target app.")
+                                val msg = if (moduleState == "ACTIVE") {
+                                    "The deFlutter Zygisk module is active, but snapshot metadata for '$pkg' has not been dumped yet. Launch or restart the target Flutter app so the module can hook its startup."
+                                } else {
+                                    "The deFlutter Zygisk module is not active on this device. Low-level Dart VM snapshot introspection requires the Zygisk module (Magisk/KernelSU) to capture isolate heap memory at app startup. Frida tracing and the Tamper Lab remain fully functional."
+                                }
+                                root.put("message", msg)
                             }
 
                             var libappBase = RootShell.getLiveModuleBase(pkg, "libapp.so")
@@ -731,6 +736,29 @@ object WebTerminalServer {
                                 } catch (_: Exception) {}
                             }
                             call.respondText(JSONObject().put("success", true).put("target", pkg).toString(), ContentType.Application.Json)
+                        }
+
+                        // 4d. Restart Target Process
+                        post("/restart-target") {
+                            val body = call.receiveText()
+                            val obj = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
+                            val pkg = obj.optString("package", TraceLogBroadcaster.activeTarget.value)
+                            if (pkg.isNotBlank()) {
+                                try {
+                                    val currentCfg = RootShell.loadCurrentConfig() ?: com.akhilari.deflutter.data.models.InspectConfig()
+                                    val updatedCfg = currentCfg.copy(process = pkg)
+                                    RootShell.saveConfig(updatedCfg)
+                                } catch (_: Exception) {}
+                                TraceLogBroadcaster.updateTarget(pkg)
+                                val res = RootShell.restartTargetApp(pkg)
+                                if (res.isSuccess) {
+                                    call.respondText(JSONObject().put("success", true).put("message", "Restarted $pkg").toString(), ContentType.Application.Json)
+                                } else {
+                                    call.respondText(JSONObject().put("success", false).put("error", res.exceptionOrNull()?.message ?: "Failed to restart").toString(), ContentType.Application.Json, HttpStatusCode.InternalServerError)
+                                }
+                            } else {
+                                call.respondText(JSONObject().put("success", false).put("error", "Target package is empty").toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
+                            }
                         }
 
                         // 5. Clear Console
