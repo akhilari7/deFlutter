@@ -12,7 +12,7 @@
   <a href="https://github.com/akhilari7/deFlutter"><img src="https://img.shields.io/badge/Platform-Android%2010--15-brightgreen.svg" alt="Platform"></a>
   <a href="https://github.com/akhilari7/deFlutter"><img src="https://img.shields.io/badge/Arch-arm64--v8a%20%7C%20x86__64-blue.svg" alt="Arch"></a>
   <a href="https://github.com/akhilari7/deFlutter"><img src="https://img.shields.io/badge/Engine-Frida%20%2B%20Dobby-orange.svg" alt="Engines"></a>
-  <a href="https://github.com/akhilari7/deFlutter/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-purple.svg" alt="License"></a>
+  <a href="https://github.com/akhilari7/deFlutter/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-purple.svg" alt="License"></a>
 </p>
 
 ---
@@ -277,4 +277,4 @@ cd deFlutter
 
 ## 📄 License
 
-This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
