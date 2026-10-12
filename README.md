@@ -63,7 +63,7 @@ The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/
 
 * ⚡ **Dual Hooking Engines**:
   * **Frida Engine (100% Standalone)**: Dynamic userland tracing powered by on-device `frida-inject` with 1-tap automated binary installation. Works out-of-the-box on any rooted device, **no Magisk module or reboot required!**
-  * **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via the **deFlutter Zygisk module** (Magisk, KernelSU, or APatch) with Capstone disassembly, LR detours, live ASLR discovery, and live `.rodata` memory scanning (optional).
+  * **Native Zygisk + Dobby Engine**: In-process zygote-stage trampoline hooks via the **deFlutter Zygisk module** (tested on Magisk; KernelSU and APatch currently untested) with Capstone disassembly, LR detours, live ASLR discovery, and live `.rodata` memory scanning (optional).
 * 🐳 **Automated Blutter Pipeline & Symbol Integration**: Pull target libraries (`libapp.so` & `libflutter.so`) via ADB, decompile with Blutter inside an isolated Docker container, extract semantic symbols (`symbols.json`), and automatically rebase and synchronize them with the deFlutter app and web companion.
 * 📦 **Dart VM Snapshot Introspection** *(Requires Zygisk Module)*: Parses the runtime Dart AOT snapshot directly from memory at startup without symbols—recovering SDK hashes, VM compiler flags, heap clusters, and thousands of discovered package/library URIs.
 * 🎯 **One-Click Function Interception**: Intercept any function offset or Blutter symbol directly from the mobile UI or Web Companion.
@@ -74,11 +74,15 @@ The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/
 
 ## 📋 Prerequisites
 
-* **Android Device**: Rooted Android 10–15 (`arm64-v8a` or `x86_64`).
-* **Root Access**: 
+* **Android Device**: 
+  * Rooted Android 10–15 (`arm64-v8a` or `x86_64`).
+  * **USB Debugging (ADB)** enabled in Developer Options.
+* **Root Solution**: 
   * *For Frida Mode (Live Tracing & Tampering)*: Standard root access (`su`). No Magisk module or reboot required.
-  * *For Zygisk Mode (Dobby Hooks & Dart VM Snapshot)*: Magisk (with Zygisk), KernelSU (with Zygisk Next), or APatch.
-* **Workstation**:
+  * *For Zygisk Mode (Dobby Hooks & Dart VM Snapshot)*: **Magisk** (with Zygisk enabled).  
+    > ⚠️ *Note: KernelSU (with Zygisk Next) and APatch are theoretically compatible with Zygisk modules but are currently **untested**.*
+* **Workstation (PC)**:
+  * **ADB (Android Debug Bridge)** installed and accessible in system `PATH`.
   * Python 3.8+ (for host bridge scripts).
   * Docker Desktop (optional, for automated Blutter decompilation).
 
@@ -119,11 +123,12 @@ Installing the companion Zygisk module unlocks full **Dual-Engine Synergy**, com
 * **Dobby Native Inline Hooking**: Intercepts native functions at zygote startup before application runtime code begins executing.
 * **Frida Tracing & Tamper Lab**: Once the Zygisk module is installed, you can also leverage Frida via the Manager App's Config tab for hot-reloading hooks and in-memory tampering.
 
-1. Flash the prebuilt module zip in Magisk, KernelSU, or APatch:
+1. Flash the prebuilt module zip in Magisk *(tested platform)*:
    ```sh
    adb push deFlutter-<version>-zygisk.zip /data/local/tmp/
    adb shell su -c "magisk --install-module /data/local/tmp/deFlutter-<version>-zygisk.zip"
    ```
+   *(Or flash via your root manager UI. Note: KernelSU/APatch are currently untested).*
    > *Note: Download the latest module ZIP from [Releases](https://github.com/akhilari7/deFlutter/releases) and substitute `<version>` with your downloaded version (e.g. `deFlutter-v2.0.0-zygisk.zip`).*
 2. **Reboot the device**.
 
