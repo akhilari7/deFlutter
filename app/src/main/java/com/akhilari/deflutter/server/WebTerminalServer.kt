@@ -42,9 +42,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.BindException
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.net.ServerSocket
 import java.time.Duration
+import android.util.Log
 
 /**
  * Embedded Ktor/CIO Web Server providing HTTP REST API and real-time WebSocket
@@ -69,8 +72,19 @@ object WebTerminalServer {
 
     fun getPort(): Int = PORT
 
+    private fun isPortAvailable(port: Int): Boolean {
+        return try {
+            ServerSocket(port).use {
+                it.reuseAddress = true
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun start(context: Context): Result<Unit> {
-        if (_isRunning.value) return Result.success(Unit)
+        if (_isRunning.value && engine != null) return Result.success(Unit)
 
         appContext = context.applicationContext
 
@@ -78,6 +92,28 @@ object WebTerminalServer {
         System.setProperty("java.net.preferIPv6Addresses", "false")
 
         return try {
+            // Clean up any stale engine instance in memory
+            try {
+                engine?.stop(500, 1000)
+            } catch (_: Exception) {}
+            engine = null
+
+            // If port 8088 is currently bound, attempt cleanup of stale listeners on rooted devices
+            if (!isPortAvailable(PORT)) {
+                try {
+                    RootShell.execSuSync("fuser -k -n tcp $PORT 2>/dev/null || fuser -k $PORT/tcp 2>/dev/null")
+                    Thread.sleep(300)
+                } catch (_: Exception) {}
+            }
+
+            if (!isPortAvailable(PORT)) {
+                val msg = "[!] Port $PORT is already in use by another process. Web Terminal server could not start."
+                Log.w("WebTerminalServer", msg)
+                TraceLogBroadcaster.postLog(msg)
+                _isRunning.value = false
+                return Result.failure(BindException("Port $PORT is already in use"))
+            }
+
             // Pre-load web app HTML from assets
             cachedHtml = try {
                 context.assets.open("web/index.html").bufferedReader().use { it.readText() }
@@ -932,6 +968,7 @@ object WebTerminalServer {
             TraceLogBroadcaster.postLog("[★] FlutterInspect Web Terminal server started on port $PORT (http://0.0.0.0:$PORT)")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e("WebTerminalServer", "Failed to start WebTerminalServer: ${e.message}", e)
             _isRunning.value = false
             Result.failure(e)
         }
