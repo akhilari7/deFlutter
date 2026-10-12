@@ -25,12 +25,13 @@ object FridaSnippetGenerator {
         targetFunc: FunctionEntry? = null,
         allFuncs: List<FunctionEntry> = emptyList(),
         isVerbose: Boolean = false,
-        traceReturn: Boolean = true
+        traceReturn: Boolean = true,
+        basicOnly: Boolean = false
     ): String {
         return when (templateType) {
             TemplateType.BASIC_TRACE -> generateBasicHook(targetLib, targetFunc, isVerbose, traceReturn)
             TemplateType.DART_ARG_INSPECTOR -> generateDartArgInspector(targetLib, targetFunc, isVerbose, traceReturn)
-            TemplateType.MULTI_FUNCTION_BATCH -> generateBatchHook(targetLib, allFuncs, isVerbose)
+            TemplateType.MULTI_FUNCTION_BATCH -> generateBatchHook(targetLib, allFuncs, isVerbose, traceReturn, basicOnly)
         }
     }
 
@@ -46,12 +47,12 @@ object FridaSnippetGenerator {
 
         val onEnterLogs = if (isVerbose) {
             """
-                        console.log(`\n[★] Hit ` + FUNC_NAME + ` @ ` + targetAddr);
+                        console.log(`\n[★] ⚡ HIT: ` + FUNC_NAME + ` (` + TARGET_OFFSET + `) @ ` + targetAddr);
                         console.log(`    Thread ID: ` + Process.getCurrentThreadId());
                         console.log(`    Return Address: ` + this.returnAddress);
             """.trimIndent()
         } else {
-            "console.log(`\\n[★] Hit ` + FUNC_NAME);"
+            "console.log(`\\n[★] ⚡ HIT: ` + FUNC_NAME + ` (` + TARGET_OFFSET + `)`);"
         }
 
         val onLeaveBlock = if (traceReturn) {
@@ -93,6 +94,8 @@ object FridaSnippetGenerator {
                     },
                     $onLeaveBlock
                 });
+                console.log(`    ├── Offset: ` + TARGET_OFFSET + ` (` + FUNC_NAME + `)`);
+                console.log(`[✓] Successfully attached Frida hook to ` + FUNC_NAME);
                 return true;
             }
 
@@ -114,13 +117,6 @@ object FridaSnippetGenerator {
              * deFlutter: Dart ARM64 AOT Runtime Argument & Return Inspector
              * Target: $name ($offsetHex) in $targetLib
              * Verbose: $isVerbose | TraceReturn: $traceReturn
-             * 
-             * Decodes:
-             *  - Registers: x0 (Arg0/Recv), x1 (Arg1), x2 (Arg2), x3 (Arg3), x4 (Arg4)
-             *  - Dart Stack (x15) & Caller Frame (x29) slots with compressed pointer resolution
-             *  - Types: Smi, OneByteString (ASCII/UTF-8), TwoByteString (UTF-16LE), C-Strings
-             *  - Deep Field Traversal (depth 2): extracts nested strings from Controllers, Values, Models
-             *  - Dart Return value on exit (x0)
              */
             'use strict';
 
@@ -129,6 +125,49 @@ object FridaSnippetGenerator {
             const FUNC_NAME = "$name";
             const IS_VERBOSE = $isVerbose;
 
+            ${getDartInspectorJsHelpers()}
+
+            function attachHook() {
+                const mod = Process.findModuleByName(TARGET_MODULE);
+                if (!mod) {
+                    console.log(`[-] Waiting for ` + TARGET_MODULE + `...`);
+                    return false;
+                }
+
+                const targetAddr = mod.base.add(TARGET_OFFSET);
+                if (IS_VERBOSE) {
+                    console.log(`[+] Attaching Dart Arg Inspector to ` + FUNC_NAME + ` @ ` + targetAddr + ` (Base: ` + mod.base + `)`);
+                } else {
+                    console.log(`[+] Attaching Dart Arg Inspector to ` + FUNC_NAME);
+                }
+
+                Interceptor.attach(targetAddr, {
+                    onEnter: function(args) {
+                        this.fnName = FUNC_NAME;
+                        this.startTime = Date.now();
+                        inspectDartCall(this.context, FUNC_NAME, "$offsetHex", IS_VERBOSE);
+                    },
+                    ${if (traceReturn) """
+                    onLeave: function(retval) {
+                        inspectDartReturn(this.context, FUNC_NAME, retval, this.startTime, IS_VERBOSE);
+                    }
+                    """.trimIndent() else "// onLeave skipped (Return tracing disabled)"}
+                });
+
+                console.log(`    ├── Offset: $offsetHex (` + FUNC_NAME + `)`);
+                console.log(`[✓] Successfully attached Frida hook to ` + FUNC_NAME);
+                return true;
+            }
+
+            if (!attachHook()) {
+                const iv = setInterval(() => {
+                    if (attachHook()) clearInterval(iv);
+                }, 500);
+            }
+        """.trimIndent()
+    }
+
+    private fun getDartInspectorJsHelpers(): String = """
             let heapBase = null;
 
             function isNullOrZero(p) {
@@ -568,148 +607,123 @@ object FridaSnippetGenerator {
                 }
             }
 
-            function attachHook() {
-                const mod = Process.findModuleByName(TARGET_MODULE);
-                if (!mod) {
-                    console.log(`[-] Waiting for ` + TARGET_MODULE + `...`);
-                    return false;
-                }
+            function inspectDartCall(ctx, fnName, fnOffset, isVerbose) {
+                const regArgs = [];
+                const regs = [
+                    { name: "Arg0 (this/recv)", val: ctx.x0 },
+                    { name: "Arg1", val: ctx.x1 },
+                    { name: "Arg2", val: ctx.x2 },
+                    { name: "Arg3", val: ctx.x3 },
+                    { name: "Arg4", val: ctx.x4 }
+                ];
 
-                const targetAddr = mod.base.add(TARGET_OFFSET);
-                if (IS_VERBOSE) {
-                    console.log(`[+] Attaching Dart Arg Inspector to ` + FUNC_NAME + ` @ ` + targetAddr + ` (Base: ` + mod.base + `)`);
-                } else {
-                    console.log(`[+] Attaching Dart Arg Inspector to ` + FUNC_NAME);
-                }
-
-                Interceptor.attach(targetAddr, {
-                    onEnter: function(args) {
-                        const ctx = this.context;
-                        this.fnName = FUNC_NAME;
-                        this.startTime = Date.now();
-
-                        const regArgs = [];
-                        const regs = [
-                            { name: "Arg0 (this/recv)", val: ctx.x0 },
-                            { name: "Arg1", val: ctx.x1 },
-                            { name: "Arg2", val: ctx.x2 },
-                            { name: "Arg3", val: ctx.x3 },
-                            { name: "Arg4", val: ctx.x4 }
-                        ];
-
-                        function formatLabelWithPtr(baseLbl, rawVal) {
-                            if (IS_VERBOSE && rawVal && rawVal.and(1).toInt32() === 1 && rawVal.compare(ptr("0x1000")) > 0) {
-                                try {
-                                    return baseLbl + " (" + decompress(rawVal) + ")";
-                                } catch (_) {}
-                            }
-                            return baseLbl;
-                        }
-
-                        for (let i = 0; i < regs.length; i++) {
-                            const r = regs[i];
-                            const desc = describeDartValue(r.val);
-                            const lbl = formatLabelWithPtr(r.name, r.val);
-                            if (i === 0) {
-                                if (desc && !desc.isNoise) {
-                                    regArgs.push({ name: lbl, text: desc.summary });
-                                } else if (desc && desc.type === 'instance') {
-                                    regArgs.push({ name: lbl, text: desc.summary });
-                                }
-                            } else {
-                                if (desc && !desc.isNoise) {
-                                    regArgs.push({ name: lbl, text: desc.summary });
-                                }
-                            }
-                        }
-
-                        // Inspect Dart Stack slots (x15), Context (x27), and Caller Frame slots (FP)
-                        const frameSlots = [];
-                        const base = getHeapBase(ctx.x0);
-                        for (let off = 0; off <= 0x40; off += 8) {
-                            try {
-                                const val = ctx.x15.add(off).readPointer();
-                                const desc = describeDartValue(val);
-                                if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
-                                    if (!regArgs.some(a => a.text === desc.summary) && !frameSlots.some(a => a.text === desc.summary)) {
-                                        frameSlots.push({ name: formatLabelWithPtr(`[Stack+0x` + off.toString(16) + `]`, val), text: desc.summary });
-                                    }
-                                }
-                            } catch (_) {}
-                        }
-
-                        // Inspect Dart Context Register: x27 (CTXREG)
+                function formatLabelWithPtr(baseLbl, rawVal) {
+                    if (isVerbose && rawVal && rawVal.and(1).toInt32() === 1 && rawVal.compare(ptr("0x1000")) > 0) {
                         try {
-                            if (ctx.x27 && !isNullOrZero(ctx.x27) && ctx.x27.and(1).toInt32() === 1) {
-                                const desc = describeDartValue(ctx.x27);
-                                if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
-                                    frameSlots.push({ name: formatLabelWithPtr("x27 (Context)", ctx.x27), text: desc.summary });
-                                }
-                            }
+                            return baseLbl + " (" + decompress(rawVal) + ")";
                         } catch (_) {}
+                    }
+                    return baseLbl;
+                }
 
-                        for (let off = 0x10; off <= 0x40; off += 8) {
-                            try {
-                                const val = ctx.fp.add(off).readPointer();
-                                const desc = describeDartValue(val);
-                                if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
-                                    if (!regArgs.some(a => a.text === desc.summary) && !frameSlots.some(a => a.text === desc.summary)) {
-                                        frameSlots.push({ name: formatLabelWithPtr(`[FP+0x` + off.toString(16) + `]`, val), text: desc.summary });
-                                    }
-                                }
-                            } catch (_) {}
+                for (let i = 0; i < regs.length; i++) {
+                    const r = regs[i];
+                    const desc = describeDartValue(r.val);
+                    const lbl = formatLabelWithPtr(r.name, r.val);
+                    if (i === 0) {
+                        if (desc && !desc.isNoise) {
+                            regArgs.push({ name: lbl, text: desc.summary });
+                        } else if (desc && desc.type === 'instance') {
+                            regArgs.push({ name: lbl, text: desc.summary });
                         }
-
-                        console.log(`\n[★] ⚡ HIT: ` + FUNC_NAME + ` (` + TARGET_OFFSET + `)`);
-                        if (regArgs.length === 0 && frameSlots.length === 0) {
-                            console.log(`    └── (no active arguments or frame data detected)`);
-                        } else {
-                            if (regArgs.length > 0) {
-                                console.log(`    ├── Call Arguments (Registers):`);
-                                for (let i = 0; i < regArgs.length; i++) {
-                                    const prefix = (i === regArgs.length - 1 && frameSlots.length === 0) ? `    │   └── ` : `    │   ├── `;
-                                    console.log(prefix + regArgs[i].name + `: ` + regArgs[i].text);
-                                }
-                            }
-                            if (frameSlots.length > 0) {
-                                console.log(`    └── Caller Frame Context (Stack/FP):`);
-                                for (let i = 0; i < frameSlots.length; i++) {
-                                    const prefix = (i === frameSlots.length - 1) ? `        └── ` : `        ├── `;
-                                    console.log(prefix + frameSlots[i].name + `: ` + frameSlots[i].text);
-                                }
-                            }
-                        }
-                    },
-                    ${if (traceReturn) """
-                    onLeave: function(retval) {
-                        try {
-                            const elapsed = Date.now() - (this.startTime || Date.now());
-                            const retValPtr = retval || (this.context ? this.context.x0 : null);
-                            const retDesc = describeDartValue(retValPtr);
-                            const retText = (retDesc && !retDesc.isNoise) ? retDesc.summary : (retValPtr && !retValPtr.isNull() ? ("0x" + retValPtr.toString(16)) : "null");
-                            let ptrSuffix = "";
-                            if (IS_VERBOSE && retValPtr && retValPtr.and(1).toInt32() === 1 && retValPtr.compare(ptr("0x1000")) > 0) {
-                                try { ptrSuffix = " (" + decompress(retValPtr) + ")"; } catch (_) {}
-                            }
-                            console.log(`[✓] ==> RETURN: ` + (this.fnName || FUNC_NAME) + ptrSuffix + ` -> ` + retText + ` [` + elapsed + `ms]\n`);
-                        } catch (err) {
-                            console.log(`[✓] ==> RETURN: ` + (this.fnName || FUNC_NAME) + ` -> (parse error: ` + err + `)\n`);
+                    } else {
+                        if (desc && !desc.isNoise) {
+                            regArgs.push({ name: lbl, text: desc.summary });
                         }
                     }
-                    """.trimIndent() else "// onLeave skipped (Return tracing disabled)"}
-                });
-                return true;
+                }
+
+                // Inspect Dart Stack slots (x15), Context (x27), and Caller Frame slots (FP)
+                const frameSlots = [];
+                for (let off = 0; off <= 0x40; off += 8) {
+                    try {
+                        const val = ctx.x15.add(off).readPointer();
+                        const desc = describeDartValue(val);
+                        if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
+                            if (!regArgs.some(a => a.text === desc.summary) && !frameSlots.some(a => a.text === desc.summary)) {
+                                frameSlots.push({ name: formatLabelWithPtr(`[Stack+0x` + off.toString(16) + `]`, val), text: desc.summary });
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                // Inspect Dart Context Register: x27 (CTXREG)
+                try {
+                    if (ctx.x27 && !isNullOrZero(ctx.x27) && ctx.x27.and(1).toInt32() === 1) {
+                        const desc = describeDartValue(ctx.x27);
+                        if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
+                            frameSlots.push({ name: formatLabelWithPtr("x27 (Context)", ctx.x27), text: desc.summary });
+                        }
+                    }
+                } catch (_) {}
+
+                for (let off = 0x10; off <= 0x40; off += 8) {
+                    try {
+                        const val = ctx.fp.add(off).readPointer();
+                        const desc = describeDartValue(val);
+                        if (desc && !desc.isNoise && (desc.isString || desc.type === 'smi' || desc.type === 'buffer' || desc.type === 'instance')) {
+                            if (!regArgs.some(a => a.text === desc.summary) && !frameSlots.some(a => a.text === desc.summary)) {
+                                frameSlots.push({ name: formatLabelWithPtr(`[FP+0x` + off.toString(16) + `]`, val), text: desc.summary });
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                console.log(`\n[★] ⚡ HIT: ` + fnName + ` (` + fnOffset + `)`);
+                if (regArgs.length === 0 && frameSlots.length === 0) {
+                    console.log(`    └── (no active arguments or frame data detected)`);
+                } else {
+                    if (regArgs.length > 0) {
+                        console.log(`    ├── Call Arguments (Registers):`);
+                        for (let i = 0; i < regArgs.length; i++) {
+                            const prefix = (i === regArgs.length - 1 && frameSlots.length === 0) ? `    │   └── ` : `    │   ├── `;
+                            console.log(prefix + regArgs[i].name + `: ` + regArgs[i].text);
+                        }
+                    }
+                    if (frameSlots.length > 0) {
+                        console.log(`    └── Caller Frame Context (Stack/FP):`);
+                        for (let i = 0; i < frameSlots.length; i++) {
+                            const prefix = (i === frameSlots.length - 1) ? `        └── ` : `        ├── `;
+                            console.log(prefix + frameSlots[i].name + `: ` + frameSlots[i].text);
+                        }
+                    }
+                }
             }
 
-            if (!attachHook()) {
-                const iv = setInterval(() => {
-                    if (attachHook()) clearInterval(iv);
-                }, 500);
+            function inspectDartReturn(ctx, fnName, retval, startTime, isVerbose) {
+                try {
+                    const elapsed = Date.now() - (startTime || Date.now());
+                    const retValPtr = retval || (ctx ? ctx.x0 : null);
+                    const retDesc = describeDartValue(retValPtr);
+                    const retText = (retDesc && !retDesc.isNoise) ? retDesc.summary : (retValPtr && !retValPtr.isNull() ? ("0x" + retValPtr.toString(16)) : "null");
+                    let ptrSuffix = "";
+                    if (isVerbose && retValPtr && retValPtr.and(1).toInt32() === 1 && retValPtr.compare(ptr("0x1000")) > 0) {
+                        try { ptrSuffix = " (" + decompress(retValPtr) + ")"; } catch (_) {}
+                    }
+                    console.log(`[✓] ==> RETURN: ` + fnName + ptrSuffix + ` -> ` + retText + ` [` + elapsed + `ms]\n`);
+                } catch (err) {
+                    console.log(`[✓] ==> RETURN: ` + fnName + ` -> (parse error: ` + err + `)\n`);
+                }
             }
-        """.trimIndent()
-    }
+    """.trimIndent()
 
-    private fun generateBatchHook(targetLib: String, funcs: List<FunctionEntry>, isVerbose: Boolean): String {
+    private fun generateBatchHook(
+        targetLib: String,
+        funcs: List<FunctionEntry>,
+        isVerbose: Boolean,
+        traceReturn: Boolean = true,
+        basicOnly: Boolean = false
+    ): String {
         val targetsJson = funcs.take(20).map { f ->
             val offHex = if (f.offset.startsWith("0x", ignoreCase = true)) f.offset.lowercase() else "0x${f.offset.lowercase()}"
             "    { name: \"${f.name.replace("\"", "\\\"")}\", offset: \"$offHex\" }"
@@ -721,17 +735,14 @@ object FridaSnippetGenerator {
             "console.log(`[+] Attached to ` + TARGET_MODULE);"
         }
 
-        val hitLog = if (isVerbose) {
-            "console.log(`[+] HIT: ` + target.name + ` (` + target.offset + `) @ ` + targetAddr);"
-        } else {
-            "console.log(`[+] HIT: ` + target.name + ` (` + target.offset + `)`);"
-        }
+        val helpersJs = if (basicOnly) "" else getDartInspectorJsHelpers()
 
         return """
             /**
              * deFlutter Batch Hook Script
              * Targets: ${funcs.take(20).size} resolved Dart functions in $targetLib (capped to top 20 for stability)
-             * Verbose: $isVerbose
+             * Mode: ${if (basicOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}
+             * Verbose: $isVerbose | TraceReturn: $traceReturn
              */
             'use strict';
 
@@ -741,6 +752,8 @@ object FridaSnippetGenerator {
             $targetsJson
             ];
 
+            $helpersJs
+
             function setupBatchHooks() {
                 const mod = Process.findModuleByName(TARGET_MODULE);
                 if (!mod) {
@@ -749,6 +762,7 @@ object FridaSnippetGenerator {
                 }
 
                 $attachModuleLog
+                console.log(`[*] Registering ` + HOOK_TARGETS.length + ` batch hook(s) into Frida:`);
                 let attachedCount = 0;
 
                 HOOK_TARGETS.forEach(target => {
@@ -756,16 +770,32 @@ object FridaSnippetGenerator {
                         const targetAddr = mod.base.add(ptr(target.offset));
                         Interceptor.attach(targetAddr, {
                             onEnter: function(args) {
-                                $hitLog
+                                this.fnName = target.name;
+                                this.startTime = Date.now();
+                                ${if (basicOnly) """
+                                console.log(`\n[★] ⚡ HIT: ` + target.name + ` (` + target.offset + `)`);
+                                """ else """
+                                inspectDartCall(this.context, target.name, target.offset, IS_VERBOSE);
+                                """}
+                            },
+                            ${if (traceReturn) """
+                            onLeave: function(retval) {
+                                ${if (basicOnly) """
+                                console.log(`[✓] Left ` + target.name + ` -> Retval: ` + retval);
+                                """ else """
+                                inspectDartReturn(this.context, target.name, retval, this.startTime, IS_VERBOSE);
+                                """}
                             }
+                            """.trimIndent() else "// onLeave skipped"}
                         });
+                        console.log(`    ├── Offset: ` + target.offset + ` (` + target.name + `)`);
                         attachedCount++;
                     } catch (e) {
-                        console.log(`[-] Failed to hook ` + target.name + `: ` + e.message);
+                        console.log(`    [-] Failed to hook ` + target.name + ` (` + target.offset + `): ` + e.message);
                     }
                 });
 
-                console.log(`[+] Successfully hooked ` + attachedCount + ` / ` + HOOK_TARGETS.length + ` functions.`);
+                console.log(`[✓] Successfully attached Frida hooks to ` + attachedCount + ` / ` + HOOK_TARGETS.length + ` functions.`);
                 return true;
             }
 

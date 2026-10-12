@@ -1,4 +1,4 @@
-﻿package com.akhilari.deflutter.ui.screens
+package com.akhilari.deflutter.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -161,14 +161,15 @@ fun FridaStudioScreen(
         }
     }
 
-    val scriptCode = remember(effectiveTemplate, targetLib, selectedFunction, effectiveBatchFuncs, isVerbose, fridaTraceReturn) {
+    val scriptCode = remember(effectiveTemplate, targetLib, selectedFunction, effectiveBatchFuncs, isVerbose, fridaTraceReturn, fridaBasicTraceOnly) {
         FridaSnippetGenerator.generateSnippet(
             templateType = effectiveTemplate,
             targetLib = targetLib.ifBlank { "libapp.so" },
             targetFunc = selectedFunction,
             allFuncs = effectiveBatchFuncs,
             isVerbose = isVerbose,
-            traceReturn = fridaTraceReturn
+            traceReturn = fridaTraceReturn,
+            basicOnly = fridaBasicTraceOnly
         )
     }
 
@@ -200,7 +201,9 @@ fun FridaStudioScreen(
             consoleLogs.clear()
             com.akhilari.deflutter.server.TraceLogBroadcaster.clear()
             com.akhilari.deflutter.server.TraceLogBroadcaster.updateBasicTraceOnly(fridaBasicTraceOnly)
-            val fridaHookConfigs = effectiveBatchFuncs.mapNotNull { f ->
+
+            val targetsToHook = if (selectedFunction != null) listOf(selectedFunction) else effectiveBatchFuncs
+            val fridaHookConfigs = targetsToHook.mapNotNull { f ->
                 val off = f.offset.removePrefix("0x").toLongOrNull(16) ?: f.offset.toLongOrNull()
                 if (off != null) com.akhilari.deflutter.data.models.HookTargetConfig(
                     offset = off,
@@ -210,19 +213,41 @@ fun FridaStudioScreen(
             }
             com.akhilari.deflutter.server.TraceLogBroadcaster.updateActiveHooks(fridaHookConfigs)
 
-            consoleLogs.add("[*] Initializing Frida in-app interceptor...")
-            consoleLogs.add("[*] Target App: $targetProcess")
-            consoleLogs.add("[*] Mode: ${if (isAttachMode) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
-            val funcDesc = when {
-                selectedFunction != null -> "${selectedFunction.name} (${selectedFunction.offset})"
-                batchFunctions.isNotEmpty() -> "${batchFunctions.size} Selected Functions (Batch Mode)"
-                else -> "All Functions (Batch Mode)"
+            val modeDesc = if (selectedFunction != null) "Single Function" else "Batch Mode (${targetsToHook.size} functions)"
+            val initMsg = "[★] Initializing Frida in-app interceptor ($modeDesc)..."
+            consoleLogs.add(initMsg)
+            com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(initMsg)
+
+            val targetMsg = "[*] Target App: $targetProcess"
+            consoleLogs.add(targetMsg)
+            com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(targetMsg)
+
+            val attachMsg = "[*] Mode: ${if (isAttachMode) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}"
+            consoleLogs.add(attachMsg)
+            com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(attachMsg)
+
+            val traceMsg = "[*] Tracing: ${if (fridaBasicTraceOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}"
+            consoleLogs.add(traceMsg)
+            com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(traceMsg)
+
+            val regMsg = "[*] Registering ${targetsToHook.size} function(s) into Frida engine:"
+            consoleLogs.add(regMsg)
+            com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(regMsg)
+
+            targetsToHook.forEach { f ->
+                val fMsg = "    ├── Offset: ${f.offset} (${f.name})"
+                consoleLogs.add(fMsg)
+                com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(fMsg)
             }
-            consoleLogs.add("[*] Function: $funcDesc")
+
             if (isAttachMode) {
-                consoleLogs.add("[*] Attaching to running process without restarting...")
+                val attachNote = "[*] Attaching to running process without restarting..."
+                consoleLogs.add(attachNote)
+                com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(attachNote)
             } else {
-                consoleLogs.add("[*] Spawning target process and injecting hook...")
+                val spawnNote = "[*] Spawning target process and injecting hook..."
+                consoleLogs.add(spawnNote)
+                com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(spawnNote)
             }
 
             onHookRunningChange(true)

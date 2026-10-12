@@ -369,19 +369,14 @@ object WebTerminalServer {
                                             return@post
                                         }
 
-                                        val template = if (basicOnly) {
-                                            com.akhilari.deflutter.data.frida.FridaSnippetGenerator.TemplateType.BASIC_TRACE
-                                        } else {
-                                            com.akhilari.deflutter.data.frida.FridaSnippetGenerator.TemplateType.MULTI_FUNCTION_BATCH
-                                        }
-
                                         val script = com.akhilari.deflutter.data.frida.FridaSnippetGenerator.generateSnippet(
                                             templateType = com.akhilari.deflutter.data.frida.FridaSnippetGenerator.TemplateType.MULTI_FUNCTION_BATCH,
                                             targetLib = "libapp.so",
                                             targetFunc = null,
                                             allFuncs = funcEntries,
                                             isVerbose = false,
-                                            traceReturn = true
+                                            traceReturn = true,
+                                            basicOnly = basicOnly
                                         )
 
                                         val hookConfigs = funcEntries.mapNotNull { f ->
@@ -393,6 +388,10 @@ object WebTerminalServer {
                                         TraceLogBroadcaster.postLog("[★] Initializing Frida Batch Interceptor (${funcEntries.size} functions)...")
                                         TraceLogBroadcaster.postLog("[*] Mode: ${if (isAttach) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
                                         TraceLogBroadcaster.postLog("[*] Tracing: ${if (basicOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}")
+                                        TraceLogBroadcaster.postLog("[*] Registering ${funcEntries.size} function(s) into Frida engine:")
+                                        funcEntries.forEach { f ->
+                                            TraceLogBroadcaster.postLog("    ├── Offset: ${f.offset} (${f.name})")
+                                        }
 
                                         val fridaRes = RootShell.startFridaInterceptor(
                                             packageName = targetProc,
@@ -518,7 +517,8 @@ object WebTerminalServer {
                                                     targetLib = "libapp.so",
                                                     targetFunc = targetFunctionEntry,
                                                     isVerbose = json.optBoolean("verbose", false),
-                                                    traceReturn = traceReturn
+                                                    traceReturn = traceReturn,
+                                                    basicOnly = basicOnly
                                                 )
                                             }
 
@@ -537,6 +537,8 @@ object WebTerminalServer {
 
                                             TraceLogBroadcaster.postLog("[*] Initializing Frida Web Dispatch ($name @ $rawOff)...")
                                             TraceLogBroadcaster.postLog("[*] Mode: ${if (isAttach) "ATTACH (Live PID)" else "SPAWN (Cold Start)"}")
+                                            TraceLogBroadcaster.postLog("[*] Tracing: ${if (basicOnly) "Basic Call Hits Only (Args OFF)" else "Full Argument Inspection"}")
+                                            TraceLogBroadcaster.postLog("    ├── Offset: $rawOff ($name)")
                                             TraceLogBroadcaster.updateHookState(true, "FRIDA")
 
                                             val fridaRes = RootShell.startFridaInterceptor(
