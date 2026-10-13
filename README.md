@@ -286,8 +286,8 @@ cd deFlutter
 
 * **[Blutter](https://github.com/worawit/blutter)** by Worawit Wangwarunyoo ([@worawit](https://github.com/worawit)) — deFlutter builds on Blutter’s Dart AOT analysis output in its runtime-analysis workflow.
 * **[FlutterTap](https://github.com/script-or-script/FlutterTap)** by [@script-or-script](https://github.com/script-or-script) — Acknowledged as the reference for integrating Dobby-based hooks into deFlutter Zygisk module.
-* **[Frida](https://github.com/frida/frida)** by Ole André Vadla Ravnås ([@oleavr](https://github.com/oleavr)) — The dynamic instrumentation toolkit powering deFlutter's runtime JavaScript engine, live argument interception, and Trace/Tamper Lab.
-* **[Dobby](https://github.com/jmpews/Dobby)** by jmpews ([@jmpews](https://github.com/jmpews)) — Lightweight, multi-platform, multi-architecture native inline hook framework.
+* **[Dobby](https://github.com/jmpews/Dobby)** by jmpews ([@jmpews](https://github.com/jmpews)) — The lightweight, multi-platform native inline hook framework powering deFlutter's low-level C++ runtime tracing engine and early zygote-level interception in `libapp.so`.
+* **[Frida](https://github.com/frida/frida)** by Ole André Vadla Ravnås ([@oleavr](https://github.com/oleavr)) — The dynamic instrumentation toolkit powering deFlutter's runtime JavaScript engine, live argument interception, and interactive Trace/Tamper Lab.
 * **[reFlutter](https://github.com/Impact-I/reFlutter)** by Impact-I ([@Impact-I](https://github.com/Impact-I)) — The Flutter reverse engineering and traffic interception framework that inspired deFlutter's name and vision.
 
 ---
