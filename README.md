@@ -23,7 +23,7 @@ Flutter Ahead-of-Time (AOT) compiles Dart applications into raw, stripped ARM64 
 
 **deFlutter** is a Flutter reverse-engineering tool that bridges static Dart AOT analysis with dynamic runtime analysis.
 
-Building on the groundwork laid by [Blutter](https://github.com/worawit/blutter), which made Dart AOT decompilation and symbol reconstruction possible, **deFlutter** brings Blutter’s static analysis output into the live runtime, helping analysts trace Dart functions and inspect arguments, with experimental support for runtime tampering.
+Building on the groundwork laid by [Blutter](https://github.com/worawit/blutter), which made Dart AOT decompilation and symbol reconstruction possible, **deFlutter** brings Blutter’s static analysis output into the live runtime, helping analysts trace Dart functions and inspect arguments, with experimental support for runtime tampering. It also automates much of the setup for resolving runtime addresses/function offsets and configuring hooks.
 
 The name **deFlutter** is a homage to [`reFlutter`](https://github.com/Impact-I/reFlutter), one of the early tools that helped shape Flutter reverse engineering and is still relevant.
 
