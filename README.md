@@ -289,6 +289,7 @@ cd deFlutter
 * **[Dobby](https://github.com/jmpews/Dobby)** by jmpews ([@jmpews](https://github.com/jmpews)) - The lightweight, multi-platform native inline hook framework powering deFlutter's low-level C++ runtime tracing engine and early zygote-level interception.
 * **[Frida](https://github.com/frida/frida)** by Ole André Vadla Ravnås ([@oleavr](https://github.com/oleavr)) - The dynamic instrumentation toolkit powering deFlutter's runtime JavaScript engine, live argument interception, and interactive Trace/Tamper Lab.
 * **[reFlutter](https://github.com/Impact-I/reFlutter)** by Impact-I ([@Impact-I](https://github.com/Impact-I)) - The Flutter reverse engineering and traffic interception framework that inspired deFlutter's name and vision.
+* **[DVFA](https://github.com/Schmiemandev/dvfa)** (Damn Vulnerable Flutter Application) by [@Schmiemandev](https://github.com/Schmiemandev) - The vulnerable Flutter testbed application featured in deFlutter's demo walkthroughs.
 
 ---
 
