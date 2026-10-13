@@ -157,10 +157,15 @@ python scripts/host_bridge.py --pkg <target_package_name>
 > **Works in Both Modes**:
 > The host bridge script extracts `libapp.so` and `libflutter.so` directly from the installed APK via ADB, completely independent of the Zygisk module. Even in Frida-only standalone mode, running the bridge will populate all symbols, class hierarchies, and function offsets for tracing.
 
-> **Tip**: If you already have decompiled symbols, you can synchronize them directly:
-> ```sh
-> python scripts/host_bridge.py --symbols path/to/symbols.json --pkg <target_package_name>
-> ```
+> **Tips & Custom Flags**:
+> * **Local Blutter (Skip Docker)**: If you already have Blutter built/installed locally on your host machine, pass `--local-blutter <path>` to skip Docker decompilation:
+>   ```sh
+>   python scripts/host_bridge.py --pkg <target_package_name> --local-blutter path/to/blutter
+>   ```
+> * **Existing Symbols**: If you already have decompiled symbols, you can synchronize them directly via `--symbols`:
+>   ```sh
+>   python scripts/host_bridge.py --symbols path/to/symbols.json --pkg <target_package_name>
+>   ```
 
 > [!NOTE]
 > **Manual Workflow (Without Host Bridge)**:
