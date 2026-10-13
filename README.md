@@ -190,6 +190,11 @@ From the Web Companion, you can:
 
 ## 🎬 Usage & Demo Walkthrough
 
+> [!NOTE]
+> **Saving Configuration & App Restart Behavior**:
+> * **Zygisk Dobby Engine**: Native inline hooks are loaded at zygote initialization. After updating target functions, always tap **Save Config** and **force-restart (kill & re-open)** the target app so Zygisk applies the hooks upon process creation.
+> * **Frida Engine**: While live attach is available for already-running processes, using **Spawn Mode (force restart)** is strongly recommended to cleanly reset the script environment and intercept early startup methods or constructors.
+
 Watch live Dart AOT function tracing and dynamic in-memory tampering in action:
 
 ### 1. Live Function Tracing & Semantic Argument Decoding
