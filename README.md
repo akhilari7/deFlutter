@@ -254,7 +254,7 @@ deFlutter/
 ├── docs/                     # Documentation, specifications, and SVG vector logos
 ├── dist/                     # Release packages & flashable module zips
 ├── gradle/                   # Gradle wrapper and build tooling
-├── LICENSE                   # Apache License 2.0
+├── LICENSE                   # MIT License
 └── README.md                 # Project documentation
 ```
 
@@ -277,6 +277,17 @@ cd deFlutter
 ```sh
 ./gradlew :module:packageMagiskZip
 ```
+
+---
+
+## 🙏 Credits & Acknowledgements
+
+**deFlutter** builds upon the groundbreaking work and insights of several open-source projects across the mobile security and reverse engineering ecosystem:
+
+* **[Blutter](https://github.com/worawit/blutter)** by Worawit Wangwarunyoo ([@worawit](https://github.com/worawit)) — The pioneering Dart AOT decompilation and symbol reconstruction framework that made static Dart analysis possible.
+* **[FlutterTap](https://github.com/script-or-script/FlutterTap)** by [@script-or-script](https://github.com/script-or-script) — Reference implementation and architecture for low-level Zygisk and Dobby native inline hooking in Flutter applications.
+* **[Dobby](https://github.com/jmpews/Dobby)** by jmpews ([@jmpews](https://github.com/jmpews)) — Lightweight, multi-platform, multi-architecture native inline hook framework.
+* **[reFlutter](https://github.com/Impact-I/reFlutter)** by Impact-I ([@Impact-I](https://github.com/Impact-I)) — The foundational Flutter traffic analysis and engine interception framework that inspired deFlutter's name and vision.
 
 ---
 
