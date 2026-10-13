@@ -72,19 +72,23 @@ fun FridaStudioScreen(
     val globalEngine by com.akhilari.deflutter.server.TraceLogBroadcaster.activeEngine.collectAsState()
     val globalActiveHooks by com.akhilari.deflutter.server.TraceLogBroadcaster.activeHooks.collectAsState()
 
+    // Dobby Engine specific state
+    var dobbySession by remember { mutableStateOf<RootShell.DobbySession?>(null) }
+    var isDobbyRunning by remember { mutableStateOf(false) }
+
+    val isFridaActive = isHookRunning || (globalHookRunning && globalEngine == "FRIDA")
+    val isDobbyActive = isDobbyRunning || (globalHookRunning && globalEngine == "DOBBY")
+    val anyHookRunning = isFridaActive || isDobbyActive
+
     var selectedEngine by remember { 
         mutableStateOf(if (globalHookRunning && globalEngine == "DOBBY") TracerEngine.DOBBY else TracerEngine.FRIDA) 
     }
-    var activeTab by remember { mutableStateOf(if (isHookRunning || (globalHookRunning && globalEngine == "DOBBY")) StudioModeTab.CONSOLE else StudioModeTab.EDITOR) }
+    var activeTab by remember { mutableStateOf(if (anyHookRunning) StudioModeTab.CONSOLE else StudioModeTab.EDITOR) }
     var selectedTemplate by remember { mutableStateOf(FridaSnippetGenerator.TemplateType.DART_ARG_INSPECTOR) }
     var showFunctionMenu by remember { mutableStateOf(false) }
     var isAttachMode by remember { mutableStateOf(false) }
     var isVerbose by remember { mutableStateOf(false) }
 
-    // Dobby Engine specific state
-    var dobbySession by remember { mutableStateOf<RootShell.DobbySession?>(null) }
-    var isDobbyRunning by remember { mutableStateOf(false) }
-    val isDobbyActive = isDobbyRunning || (globalHookRunning && globalEngine == "DOBBY")
     var traceReturnValue by remember { mutableStateOf(false) }
     var dobbyBasicTraceOnly by remember { mutableStateOf(false) }
 
@@ -104,11 +108,17 @@ fun FridaStudioScreen(
     }
 
     LaunchedEffect(globalHookRunning, globalEngine) {
-        if (globalHookRunning && globalEngine == "DOBBY") {
-            isDobbyRunning = true
-            selectedEngine = TracerEngine.DOBBY
+        if (globalHookRunning) {
             onHookRunningChange(true)
-        } else if (!globalHookRunning && globalEngine == "DOBBY") {
+            if (globalEngine == "DOBBY") {
+                isDobbyRunning = true
+                selectedEngine = TracerEngine.DOBBY
+            } else if (globalEngine == "FRIDA") {
+                isDobbyRunning = false
+                selectedEngine = TracerEngine.FRIDA
+            }
+            activeTab = StudioModeTab.CONSOLE
+        } else {
             isDobbyRunning = false
             onHookRunningChange(false)
         }
@@ -128,6 +138,12 @@ fun FridaStudioScreen(
 
     // Mirror logs arriving from Web Terminal or background into consoleLogs
     LaunchedEffect(Unit) {
+        val buffered = com.akhilari.deflutter.server.TraceLogBroadcaster.getRecentLogs()
+        for (line in buffered) {
+            if (!consoleLogs.contains(line)) {
+                consoleLogs.add(line)
+            }
+        }
         com.akhilari.deflutter.server.TraceLogBroadcaster.logsFlow.collect { line ->
             if (line == "__CLEAR_LOGS__") {
                 consoleLogs.clear()
@@ -289,10 +305,13 @@ fun FridaStudioScreen(
         fridaSession?.stop()
         onFridaSessionChange(null)
         onHookRunningChange(false)
+        com.akhilari.deflutter.server.WebTerminalServer.stopActiveFridaSession()
         com.akhilari.deflutter.server.TraceLogBroadcaster.updateHookState(false, "FRIDA")
         com.akhilari.deflutter.server.TraceLogBroadcaster.updateActiveHooks(emptyList())
         val msg = "[*] Interceptor detached & stopped."
-        consoleLogs.add(msg)
+        if (!consoleLogs.contains(msg)) {
+            consoleLogs.add(msg)
+        }
         com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(msg)
     }
 
@@ -413,8 +432,6 @@ fun FridaStudioScreen(
             com.akhilari.deflutter.server.TraceLogBroadcaster.postLog(msg)
         }
     }
-
-    val anyHookRunning = isHookRunning || isDobbyActive
 
     Column(
         modifier = Modifier
@@ -1272,7 +1289,7 @@ fun FridaStudioScreen(
             }
         } else {
             // Frida Action Buttons
-            if (!isHookRunning) {
+            if (!isFridaActive) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1410,8 +1427,9 @@ fun FridaStudioScreen(
                 ) {
                     Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
+                    val hookCountLabel = if (globalActiveHooks.isNotEmpty()) " (${globalActiveHooks.size} ACTIVE)" else ""
                     Text(
-                        text = "STOP INTERCEPTOR",
+                        text = "STOP FRIDA HOOK$hookCountLabel",
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         fontSize = 13.sp

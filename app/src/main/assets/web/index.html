@@ -761,29 +761,45 @@
 
                 <!-- Editor Toolbar & Helper Injection -->
                 <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-var); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 11.5px;">
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 7px; align-items: center; flex-wrap: wrap;">
                         <span style="color: var(--text-muted); font-weight: 600;">Presets:</span>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('bypass_bool')" title="Override return value on exit (e.g. force true)">+ Return Value</button>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_smi')" title="Tamper Smi integer argument in register (args[1])">+ Smi Int (Arg)</button>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_direct_str')" title="Tamper direct Dart String passed in register (args[1])">+ Direct String (Arg)</button>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_model')" title="Tamper property/field inside a Class Instance / Model (e.g. Password.value)">+ Instance Field (Object)</button>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_stack')" title="Tamper local string variable on Dart stack (x15)">+ Stack Slot String</button>
-                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px;" onmousedown="event.preventDefault()" onclick="insertLabSnippet('cid_guard')" title="Filter tampering by Dart Class ID (e.g. Key vs IV)">+ CID Guard</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #10b981; color: #34d399; background: rgba(16, 185, 129, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('bypass_bool')" title="Override return value on exit (e.g. force true)">+ Return Value</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #3b82f6; color: #60a5fa; background: rgba(59, 130, 246, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_smi')" title="Tamper Smi integer argument in register (args[1])">+ Smi Int (Arg)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #f59e0b; color: #fbbf24; background: rgba(245, 158, 11, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_direct_str')" title="Tamper direct Dart String passed in register (args[1])">+ Direct String (Arg)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #a855f7; color: #c084fc; background: rgba(168, 85, 247, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_model')" title="Tamper property/field inside a Class Instance / Model (e.g. Password.value)">+ Instance Field (Object)</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #ec4899; color: #f472b6; background: rgba(236, 72, 153, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('tamper_stack')" title="Tamper local string variable on Dart stack (x15)">+ Stack Slot String</button>
+                        <button class="btn" style="padding: 2px 8px; font-size: 10.5px; border: 1px solid #06b6d4; color: #22d3ee; background: rgba(6, 182, 212, 0.08);" onmousedown="event.preventDefault()" onclick="insertLabSnippet('cid_guard')" title="Filter tampering by Dart Class ID (e.g. Key vs IV)">+ CID Filter</button>
                     </div>
                     <div style="color: var(--text-muted); font-family: monospace; font-size: 11px;" id="labOffsetInfo">
                         Offset: -
                     </div>
                 </div>
 
-                <!-- Monospace Code Editor Area -->
-                <div style="flex: 1; display: flex; flex-direction: column; min-height: 380px;">
+                <!-- Monospace Code Editor Area with Preset Highlight Backdrop -->
+                <div id="labEditorWrapper" style="position: relative; flex: 1; display: flex; flex-direction: column; min-height: 380px; background: #090d16; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <div id="labEditorBackdrop" style="
+                        position: absolute;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        padding: 14px;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                        font-size: 12px;
+                        line-height: 1.6;
+                        white-space: pre;
+                        tab-size: 4;
+                        color: transparent;
+                        pointer-events: none;
+                        overflow: hidden;
+                        z-index: 1;
+                    "></div>
                     <textarea id="labEditor" spellcheck="false" style="
+                        position: relative;
+                        z-index: 2;
                         flex: 1;
                         width: 100%;
-                        background: #090d16;
+                        height: 100%;
+                        background: transparent;
                         color: #a5f3fc;
-                        border: 1px solid var(--border);
-                        border-radius: 8px;
+                        border: none;
                         padding: 14px;
                         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
                         font-size: 12px;
@@ -1099,6 +1115,8 @@ python blutter2symbols.py blutter_out/ -o symbols.json</pre>
                 searchSymbols(document.getElementById('symSearch') ? document.getElementById('symSearch').value : "");
             } else if (name === 'snapshot') {
                 loadSnapshot();
+            } else if (name === 'tracelab') {
+                setTimeout(updateLabHighlights, 50);
             }
         }
 
@@ -2090,63 +2108,31 @@ ${paramLogs || '            // args[0] (this/recv)'}
             let tamperStringRecipe = "";
             let foundArgTarget = null;
 
-            // Check if any register argument has a model field containing a string or Uint8List (e.g. Arg2 -> [+0x10: "password"])
+            // Check if any register argument has a model field containing a Dart string (e.g. Arg2 -> [+0x10: "password"])
             for (let r of regArgs) {
-                const isU8Field = r.val.includes('Uint8List');
-                const fieldMatch = r.val.match(/\+0x([0-9a-fA-F]+):\s*(?:Uint8List[^"]*)?"([^"]+)"/);
+                const fieldMatch = r.val.match(/\+0x([0-9a-fA-F]+):\s*"([^"\\]+)"/);
                 if (fieldMatch) {
                     foundArgTarget = {
-                        type: isU8Field ? 'model_field_u8' : 'model_field',
+                        type: 'model_field',
                         idx: r.idx,
                         fieldOff: '0x' + fieldMatch[1],
                         strSample: fieldMatch[2],
                         fullSummary: r.val
                     };
                     break;
-                } else if (r.val.includes('Uint8List') && r.val.includes('"')) {
-                    const u8DirectMatch = r.val.match(/"([^"]+)"/);
-                    foundArgTarget = {
-                        type: 'direct_u8',
-                        idx: r.idx,
-                        strSample: u8DirectMatch ? u8DirectMatch[1] : '',
-                        fullSummary: r.val
-                    };
-                    break;
-                } else if (r.val.startsWith('"')) {
+                } else if (r.val.startsWith('"') || (r.val.startsWith('String') && r.val.includes('"'))) {
+                    const strMatch = r.val.match(/"([^"]+)"/);
                     foundArgTarget = {
                         type: 'direct_arg',
                         idx: r.idx,
-                        strSample: r.val.replace(/"/g, ''),
+                        strSample: strMatch ? strMatch[1] : r.val.replace(/"/g, ''),
                         fullSummary: r.val
                     };
                     break;
                 }
             }
 
-            if (foundArgTarget && foundArgTarget.type === 'model_field_u8') {
-                tamperStringRecipe = `
-            // [B] Model Instance Field Uint8List Tampering (Arg${foundArgTarget.idx} -> field ${foundArgTarget.fieldOff} "${foundArgTarget.strSample}"):
-            try {
-                const targetObj = args[${foundArgTarget.idx}];
-                console.log("    Target Arg${foundArgTarget.idx} Object: " + targetObj);
-                if (targetObj && targetObj.and(1).toInt32() === 1) {
-                    const untagged = targetObj.sub(1);
-                    const heapBase = targetObj.and(ptr("0xffffffff00000000"));
-                    // Read 32-bit compressed pointer to Uint8List buffer at ${foundArgTarget.fieldOff}:
-                    const compOffset = untagged.add(${foundArgTarget.fieldOff}).readU32();
-                    const u8Obj = heapBase.add(compOffset);
-                    tamperDartBuffer(u8Obj, "H@cK3D", "${foundArgTarget.strSample}", heapBase);
-                } else {
-                    console.log("    [-] Arg${foundArgTarget.idx} is not a valid tagged Dart Object: " + targetObj);
-                }
-            } catch (err) {
-                console.log("    [-] Model field tamper error: " + err);
-            }`;
-            } else if (foundArgTarget && foundArgTarget.type === 'direct_u8') {
-                tamperStringRecipe = `
-            // [B] Direct Register Argument Uint8List Tampering (Arg${foundArgTarget.idx}: "${foundArgTarget.strSample}"):
-            tamperDartBuffer(args[${foundArgTarget.idx}], "H@cK3D", "${foundArgTarget.strSample}");`;
-            } else if (foundArgTarget && foundArgTarget.type === 'model_field') {
+            if (foundArgTarget && foundArgTarget.type === 'model_field') {
                 tamperStringRecipe = `
             // [B] Model Instance Field Tampering (Arg${foundArgTarget.idx} -> field ${foundArgTarget.fieldOff} "${foundArgTarget.strSample}"):
             try {
@@ -2158,7 +2144,7 @@ ${paramLogs || '            // args[0] (this/recv)'}
                     // Read 32-bit compressed pointer to string field at ${foundArgTarget.fieldOff}:
                     const compOffset = untagged.add(${foundArgTarget.fieldOff}).readU32();
                     const strObj = heapBase.add(compOffset);
-                    tamperDartString(strObj, "H@cK3D", heapBase);
+                    tamperDartString(strObj, "NEW_VALUE", heapBase);
                 } else {
                     console.log("    [-] Arg${foundArgTarget.idx} is not a valid tagged Dart Object: " + targetObj);
                 }
@@ -2168,30 +2154,20 @@ ${paramLogs || '            // args[0] (this/recv)'}
             } else if (foundArgTarget && foundArgTarget.type === 'direct_arg') {
                 tamperStringRecipe = `
             // [B] Direct Register Argument Tampering (Arg${foundArgTarget.idx}: "${foundArgTarget.strSample}"):
-            tamperDartString(args[${foundArgTarget.idx}], "H@cK3D");`;
+            tamperDartString(args[${foundArgTarget.idx}], "NEW_VALUE");`;
             } else {
                 const strSlot = stackSlots.find(s => s.val.includes('"'));
                 if (strSlot) {
                     const ptrBase = strSlot.isFp ? "this.context.fp" : "(this.context.x15 || this.context.sp)";
-                    if (strSlot.val.includes('Uint8List')) {
-                        const u8Match = strSlot.val.match(/"([^"]+)"/);
-                        const sample = u8Match ? u8Match[1] : '';
-                        tamperStringRecipe = `
-            // [B] Dart Stack Slot Uint8List Tampering (Observed: ${strSlot.val.substring(0, 30)}):
-            const dartSp = (this.context.x15 || this.context.sp);
-            tamperDartBuffer(${ptrBase}.add(${strSlot.off}).readPointer(), "H@cK3D", "${sample}");`;
-                    } else {
-                        tamperStringRecipe = `
+                    tamperStringRecipe = `
             // [B] Dart Stack Slot Tampering (Observed: ${strSlot.val.substring(0, 30)}):
             // Note: In ARM64 Dart AOT, x15 is Dart's Stack Pointer (SPREG)
             const dartSp = (this.context.x15 || this.context.sp);
-            tamperDartString(${ptrBase}.add(${strSlot.off}).readPointer(), "H@cK3D");`;
-                    }
+            tamperDartString(${ptrBase}.add(${strSlot.off}).readPointer(), "NEW_VALUE");`;
                 } else {
                     tamperStringRecipe = `
             // [B] Tamper Argument / Stack:
-            // tamperDartString(args[1], "new_value");
-            // tamperDartBuffer(args[0], "REPLACEMENT_VALUE", "SEARCH_TARGET");`;
+            // tamperDartString(args[1], "new_value");`;
                 }
             }
 
@@ -2204,7 +2180,7 @@ ${paramLogs || '            // args[0] (this/recv)'}
                     const cidHex = cidMatch[1];
                     const clsName = cidMatch[2] ? cidMatch[2].trim() : "TargetClass";
                     cidFilterComment = `
-            // [C] Optional Class ID Guard (Observed this/args[0]: ${clsName} @ cid=0x${cidHex}):
+            // [C] Optional Class ID (CID) Filter (Observed this/args[0]: ${clsName} @ cid=0x${cidHex}):
             // const cid = getDartCid(args[0]);
             // if (cid === 0x${cidHex}) {
             //     // Only tamper when invoked by ${clsName}
@@ -2298,79 +2274,6 @@ ${paramLogs || '            // args[0] (this/recv)'}
         }
     }
 
-    // --- GENERIC DART UINT8LIST / BYTE BUFFER TAMPERING HELPER ---
-    // Works across 64-bit Dart AOT (ARM64) for Uint8List, TypedData buffers, and raw byte arrays.
-    function tamperDartBuffer(dartObjPtr, newContent, searchTarget, heapBase) {
-        try {
-            if (!dartObjPtr || dartObjPtr.isNull()) {
-                console.log("    [-] tamperDartBuffer: Pointer is NULL");
-                return false;
-            }
-            let resolvedPtr = dartObjPtr;
-            if (resolvedPtr.and(ptr("0xffffffff00000000")).isNull() && heapBase) {
-                resolvedPtr = heapBase.add(resolvedPtr);
-            }
-            if (resolvedPtr.and(1).toInt32() !== 1) {
-                console.log("    [-] tamperDartBuffer: Pointer " + resolvedPtr + " is not tagged (bit 0 != 1)");
-                return false;
-            }
-            const untagged = resolvedPtr.sub(1);
-
-            // In Dart AOT 64-bit, Uint8List inline payload starts at +12, +16, +20, or +24
-            for (let dataOffset of [12, 16, 20, 24]) {
-                try {
-                    const probe = untagged.add(dataOffset).readByteArray(256);
-                    if (!probe) continue;
-                    const u8 = new Uint8Array(probe);
-
-                    // Mode A: Search & Replace specific text inside the byte buffer
-                    if (searchTarget && typeof searchTarget === "string" && searchTarget.length > 0) {
-                        let str = "";
-                        for (let j = 0; j < u8.length; j++) str += String.fromCharCode(u8[j]);
-                        const matchIdx = str.indexOf(searchTarget);
-                        if (matchIdx !== -1) {
-                            const patchAddr = untagged.add(dataOffset + matchIdx);
-                            const patchBytes = [];
-                            const repStr = (newContent !== undefined && newContent !== null) ? String(newContent) : "";
-                            const safeLen = Math.min(repStr.length, searchTarget.length);
-                            for (let i = 0; i < safeLen; i++) patchBytes.push(repStr.charCodeAt(i) & 0xff);
-                            // Pad remaining with spaces if new content is shorter
-                            for (let i = safeLen; i < searchTarget.length; i++) patchBytes.push(0x20);
-                            patchAddr.writeByteArray(patchBytes);
-                            console.log("    [★] Successfully patched Uint8List @ +" + (dataOffset + matchIdx) + ": \\"" + searchTarget + "\\" -> \\"" + repStr + "\\"");
-                            return true;
-                        }
-                    } else {
-                        // Check if this offset has printable/non-zero payload
-                        let nonZero = 0;
-                        for (let j = 0; j < Math.min(u8.length, 32); j++) {
-                            if (u8[j] !== 0) nonZero++;
-                        }
-                        if (nonZero === 0) continue;
-
-                        // Mode B: Direct write from start of payload (e.g. 16/32-byte key or IV)
-                        const patchBytes = [];
-                        if (typeof newContent === "string") {
-                            for (let i = 0; i < newContent.length; i++) patchBytes.push(newContent.charCodeAt(i) & 0xff);
-                        } else if (Array.isArray(newContent)) {
-                            for (let b of newContent) patchBytes.push(b & 0xff);
-                        }
-                        if (patchBytes.length > 0) {
-                            untagged.add(dataOffset).writeByteArray(patchBytes);
-                            console.log("    [★] Successfully wrote " + patchBytes.length + " bytes to Uint8List @ +" + dataOffset);
-                            return true;
-                        }
-                    }
-                } catch (_) {}
-            }
-            console.log("    [-] tamperDartBuffer: Could not locate valid Uint8List payload");
-            return false;
-        } catch (e) {
-            console.log("    [-] tamperDartBuffer error: " + e);
-            return false;
-        }
-    }
-
     // --- GENERIC DART CLASS ID (CID) HELPER ---
     // Reads numeric Class ID from Dart heap object (e.g. 0x479 for Key, 0x47a for IV)
     function getDartCid(dartObjPtr, heapBase) {
@@ -2442,7 +2345,10 @@ ${tamperStringRecipe}${cidFilterComment}
             if (offInfo) offInfo.textContent = `Offset: ${data.offset}`;
 
             const editor = document.getElementById('labEditor');
-            if (editor) editor.value = data.script;
+            if (editor) {
+                editor.value = data.script;
+                updateLabHighlights();
+            }
 
             switchTab('tracelab');
             showToast(`Loaded ${fnName} into Trace Lab!`);
@@ -2476,25 +2382,139 @@ ${tamperStringRecipe}${cidFilterComment}
             showToast(`Downloaded ${cleanName}.js`);
         }
 
+        function updateLabHighlights() {
+            const editor = document.getElementById('labEditor');
+            const backdrop = document.getElementById('labEditorBackdrop');
+            if (!editor || !backdrop) return;
+
+            backdrop.scrollTop = editor.scrollTop;
+            backdrop.scrollLeft = editor.scrollLeft;
+
+            const lines = editor.value.split('\n');
+            let insidePreset = false;
+            let presetBg = 'rgba(168, 85, 247, 0.14)';
+            let presetBorder = '#c084fc';
+            let html = '';
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.includes('[PRESET INJECTED:')) {
+                    insidePreset = true;
+                    if (line.includes('OVERRIDE RETURN VALUE')) {
+                        presetBg = 'rgba(16, 185, 129, 0.14)';
+                        presetBorder = '#34d399';
+                    } else if (line.includes('TAMPER SMI INTEGER')) {
+                        presetBg = 'rgba(59, 130, 246, 0.14)';
+                        presetBorder = '#60a5fa';
+                    } else if (line.includes('DIRECT STRING')) {
+                        presetBg = 'rgba(245, 158, 11, 0.14)';
+                        presetBorder = '#fbbf24';
+                    } else if (line.includes('INSTANCE FIELD')) {
+                        presetBg = 'rgba(168, 85, 247, 0.14)';
+                        presetBorder = '#c084fc';
+                    } else if (line.includes('STACK SLOT')) {
+                        presetBg = 'rgba(236, 72, 153, 0.14)';
+                        presetBorder = '#f472b6';
+                    } else if (line.includes('CLASS ID') || line.includes('CID FILTER')) {
+                        presetBg = 'rgba(6, 182, 212, 0.14)';
+                        presetBorder = '#22d3ee';
+                    }
+                }
+
+                if (insidePreset) {
+                    html += `<div style="background: ${presetBg}; border-left: 3px solid ${presetBorder}; height: 19.2px; line-height: 19.2px;"> </div>`;
+                } else {
+                    html += '<div style="height: 19.2px; line-height: 19.2px;"> </div>';
+                }
+
+                if (line.includes('[END PRESET:')) {
+                    insidePreset = false;
+                }
+            }
+            backdrop.innerHTML = html;
+        }
+
         function insertLabSnippet(type) {
             const editor = document.getElementById('labEditor');
             if (!editor) return;
 
             let snippet = '';
+            let label = 'Preset';
             if (type === 'bypass_bool') {
-                snippet = '\n            // --- 1. OVERRIDE RETURN VALUE (onLeave) ---\n            // Force Boolean True (0x1) or custom return pointer on function exit\n            retval.replace(ptr(0x1));';
+                label = 'Return Value Bypass';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: OVERRIDE RETURN VALUE]                                ║
+            // ║ Force Boolean True (0x1) or custom return pointer on function exit         ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            retval.replace(ptr(0x1)); // Force Boolean True
+            // ─── [END PRESET: OVERRIDE RETURN VALUE] ────────────────────────────────────`;
             } else if (type === 'tamper_smi') {
-                snippet = '\n            // --- 2. TAMPER SMI INTEGER ARGUMENT (onEnter) ---\n            // Dart Smi integers are bit-shifted left by 1 (e.g. 42 << 1)\n            const customInt = 1337;\n            args[1] = ptr(customInt << 1); // Change args[1] to target arg index';
+                label = 'Smi Int Argument';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: TAMPER SMI INTEGER ARGUMENT]                          ║
+            // ║ Dart Smi integers are bit-shifted left by 1 (e.g. 42 << 1)                 ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            const customInt = 1337;
+            args[1] = ptr(customInt << 1); // Change args[1] to target arg index
+            // ─── [END PRESET: TAMPER SMI INTEGER ARGUMENT] ──────────────────────────────`;
             } else if (type === 'tamper_direct_str') {
-                snippet = '\n            // --- 3. TAMPER DIRECT STRING ARGUMENT (onEnter) ---\n            // Use when the function receives a Dart String directly in a register\n            const strArg = args[1]; // Change args[1] to target arg index (x1, x2, etc.)\n            tamperDartString(strArg, "NEW_VALUE");';
-            } else if (type === 'tamper_uint8list') {
-                snippet = '\n            // --- 3b. TAMPER UINT8LIST BYTE BUFFER (onEnter) ---\n            // Use when the argument or field is a Uint8List / byte buffer (e.g. crypto keys, IVs, tokens)\n            const u8Arg = args[0]; // Change args[0] to target arg index (x0, x1, x2, etc.)\n            // Option A: Search and replace substring in buffer:\n            tamperDartBuffer(u8Arg, "REPLACEMENT_VALUE", "SEARCH_TARGET");\n            // Option B: Overwrite entire buffer from start (e.g. 16/32 byte key/IV):\n            // tamperDartBuffer(u8Arg, "EXACT_16_OR_32_CHAR_KEY_OR_IV");';
+                label = 'Direct String Argument';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: TAMPER DIRECT STRING ARGUMENT]                        ║
+            // ║ In-place overwrite for Dart String passed directly in register            ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            const strArg = args[1]; // Change args[1] to target arg index (x1, x2, etc.)
+            tamperDartString(strArg, "NEW_VALUE");
+            // ─── [END PRESET: TAMPER DIRECT STRING ARGUMENT] ────────────────────────────`;
             } else if (type === 'tamper_model') {
-                snippet = '\n            // --- 4. TAMPER INSTANCE FIELD (Class/Model Object Property) ---\n            // Use when an argument is a Class Instance (e.g. Password, User, Token)\n            // and you want to tamper one of its internal properties/member variables.\n            try {\n                const targetObj = args[2]; // Register Argument holding the Object Instance (x1, x2, etc.)\n                if (targetObj && targetObj.and(1).toInt32() === 1) {\n                    const untagged = targetObj.sub(1);\n                    const heapBase = targetObj.and(ptr("0xffffffff00000000"));\n                    const fieldOffset = 0x10; // Object Field Offset from live hit logs (+0xc, +0x10, etc.)\n                    const comp = untagged.add(fieldOffset).readU32(); // 32-bit compressed pointer\n                    tamperDartString(heapBase.add(comp), "H@CK3D", heapBase);\n                } else {\n                    console.log("[-] Target argument is not a tagged Dart object");\n                }\n            } catch (err) {\n                console.log("[-] Instance field tamper error: " + err);\n            }';
+                label = 'Instance Field (Model Object)';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: TAMPER INSTANCE FIELD (CLASS OBJECT)]                 ║
+            // ║ Deference compressed pointer inside Dart model instance (User, Password)  ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            try {
+                const targetObj = args[1]; // Change to register holding the Object Instance
+                if (targetObj && targetObj.and(1).toInt32() === 1) {
+                    const untagged = targetObj.sub(1);
+                    const heapBase = targetObj.and(ptr("0xffffffff00000000"));
+                    const fieldOffset = 0x10; // Object Field Offset from live hit logs (+0xc, +0x10, etc.)
+                    const comp = untagged.add(fieldOffset).readU32(); // 32-bit compressed pointer
+                    tamperDartString(heapBase.add(comp), "H@CK3D", heapBase);
+                } else {
+                    console.log("[-] Target argument is not a tagged Dart object");
+                }
+            } catch (err) {
+                console.log("[-] Instance field tamper error: " + err);
+            }
+            // ─── [END PRESET: TAMPER INSTANCE FIELD] ────────────────────────────────────`;
             } else if (type === 'tamper_stack') {
-                snippet = '\n            // --- 5. TAMPER DART STACK SLOT (onEnter) ---\n            // Use when a string was captured from Dart Stack frames (x15 / sp)\n            const dartSp = (this.context.x15 || this.context.sp); // ARM64 Dart SP\n            const stackSlotOffset = 0x10; // Stack offset from live hit logs ([Stack+0x10])\n            tamperDartString(dartSp.add(stackSlotOffset).readPointer(), "H@CK3D");';
+                label = 'Stack Slot String';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: TAMPER DART STACK SLOT]                               ║
+            // ║ In-place string overwrite for local variables captured on Dart SP (x15)   ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            const dartSp = (this.context.x15 || this.context.sp); // ARM64 Dart SP
+            const stackSlotOffset = 0x10; // Stack offset from live hit logs ([Stack+0x10])
+            tamperDartString(dartSp.add(stackSlotOffset).readPointer(), "H@CK3D");
+            // ─── [END PRESET: TAMPER DART STACK SLOT] ───────────────────────────────────`;
             } else if (type === 'cid_guard') {
-                snippet = '\n            // --- 6. CLASS ID (CID) FILTER / GUARD (onEnter) ---\n            // Use to ensure tampering only occurs for a specific class instance\n            const targetCid = getDartCid(args[0]); // Class ID of receiver (args[0]) or argument\n            console.log("    [i] Observed Class ID: 0x" + targetCid.toString(16));\n            if (targetCid === 0x479) {\n                // Only execute tamper for this specific Class ID (e.g. 0x479 = Key, 0x47a = IV)\n            }';
+                label = 'Class ID (CID) Filter';
+                snippet = `
+            // ╔═══════════════════════════════════════════════════════════════════════════╗
+            // ║ ⚡ [PRESET INJECTED: CLASS ID (CID) FILTER]                                ║
+            // ║ Conditionally tamper only when invoked by a specific Class ID (e.g. Key)  ║
+            // ╚═══════════════════════════════════════════════════════════════════════════╝
+            const targetCid = getDartCid(args[0]); // Class ID of receiver (args[0]) or argument
+            console.log("    [i] Observed Class ID: 0x" + targetCid.toString(16));
+            if (targetCid === 0x479) {
+                // Execute tamper ONLY for this specific Class ID (e.g. 0x479 = Key, 0x47a = IV)
+            }
+            // ─── [END PRESET: CLASS ID (CID) FILTER] ────────────────────────────────────`;
             }
 
             const text = editor.value;
@@ -2543,7 +2563,8 @@ ${tamperStringRecipe}${cidFilterComment}
                 }
             }
 
-            showToast(`Inserted recipe snippet at cursor!`);
+            updateLabHighlights();
+            showToast(`⚡ Injected & Highlighted: ${label}!`);
         }
 
         function applyLabHook(engine = 'frida_spawn') {
@@ -2912,6 +2933,18 @@ ${tamperStringRecipe}${cidFilterComment}
                             const btn = document.getElementById('scrollBtn');
                             if (btn) btn.classList.add('active');
                         }
+                    }
+                });
+            }
+
+            const labEditor = document.getElementById('labEditor');
+            const labBackdrop = document.getElementById('labEditorBackdrop');
+            if (labEditor) {
+                labEditor.addEventListener('input', updateLabHighlights);
+                labEditor.addEventListener('scroll', () => {
+                    if (labBackdrop) {
+                        labBackdrop.scrollTop = labEditor.scrollTop;
+                        labBackdrop.scrollLeft = labEditor.scrollLeft;
                     }
                 });
             }

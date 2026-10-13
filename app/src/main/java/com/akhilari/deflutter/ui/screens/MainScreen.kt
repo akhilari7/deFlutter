@@ -1,4 +1,4 @@
-﻿package com.akhilari.deflutter.ui.screens
+package com.akhilari.deflutter.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -61,6 +61,12 @@ fun MainScreen() {
     }
 
     val activeTarget by com.akhilari.deflutter.server.TraceLogBroadcaster.activeTarget.collectAsState()
+    val globalHookRunning by com.akhilari.deflutter.server.TraceLogBroadcaster.isHookRunning.collectAsState()
+    val globalEngine by com.akhilari.deflutter.server.TraceLogBroadcaster.activeEngine.collectAsState()
+
+    LaunchedEffect(globalHookRunning, globalEngine) {
+        isFridaHookRunning = globalHookRunning && globalEngine == "FRIDA"
+    }
 
     // Sync state when activeTarget is updated externally (via Host Bridge or Web Terminal)
     LaunchedEffect(activeTarget) {

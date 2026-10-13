@@ -213,7 +213,7 @@ Watch live Dart AOT function tracing and dynamic in-memory tampering in action:
 > [!TIP]
 > **GUI-Driven Workflow & Standalone Script Export**:
 > * **100% GUI-Based Operation**: Once deployed, deFlutter is completely GUI-driven. All real-time function tracing, decoded argument viewing, symbol searching, and live tampering can be executed seamlessly from the Web Companion (`http://localhost:8088`) without requiring manual terminal commands.
-> * **Trace & Tamper Lab Presets**: The Web Companion currently provides an experiment feature with basic presets to modify Dart String objects (direct arguments and nested instance fields), manipulate register Smi integers, bypass return values, and apply Class ID (`CID`) guards.
+> * **Trace & Tamper Lab Presets**: The Web Companion currently provides an experiment feature with basic presets to modify Dart String objects (direct arguments and nested instance fields), manipulate register Smi integers, bypass return values, and apply Class ID (`CID`) filters.
 > * **Extensible Beyond deFlutter**: You are not restricted to the Web Companion! Every time you configure or inspect a function, deFlutter automatically generates complete, standalone Frida scripts in the handler editor. You can copy these tailored scripts directly into your external Frida setup, CLI workflows, or custom tooling to extend your analysis outside of deFlutter.
 
 ---

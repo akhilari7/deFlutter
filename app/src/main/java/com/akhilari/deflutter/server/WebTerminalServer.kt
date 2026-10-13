@@ -70,6 +70,14 @@ object WebTerminalServer {
 
     private var activeFridaSession: RootShell.FridaSession? = null
 
+    fun stopActiveFridaSession() {
+        try {
+            activeFridaSession?.stop()
+            activeFridaSession = null
+            RootShell.execSuSync("killall frida-inject 2>/dev/null")
+        } catch (_: Exception) {}
+    }
+
     fun getPort(): Int = PORT
 
     private fun isPortAvailable(port: Int): Boolean {
